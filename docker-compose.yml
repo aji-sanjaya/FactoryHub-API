@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+
+  erp_php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: erp_php
+    restart: unless-stopped
+    expose:
+      - "9000"
+    volumes:
+      - .:/var/www/html
+    networks:
+      - proxy_net
+
+  erp_nginx:
+    image: nginx:alpine
+    container_name: erp_nginx
+    restart: unless-stopped
+    depends_on:
+      - erp_php
+    volumes:
+      - .:/var/www/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    environment:
+      VIRTUAL_HOST: erp.dpkgreenlog.id
+      LETSENCRYPT_HOST: erp.dpkgreenlog.id
+      LETSENCRYPT_EMAIL: your-email@dpkgreenlog.id
+    networks:
+      - proxy_net
+
+networks:
+  proxy_net:
+    external: true
