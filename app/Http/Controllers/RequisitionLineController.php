@@ -360,6 +360,32 @@ class RequisitionLineController extends Controller
             }
 
             $lineIds = $validated['line_ids'];
+
+            $linkedLineIds = \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('c_orderline')
+                ->whereIn('m_requisitionline_id', $lineIds)
+                ->whereNotNull('m_requisitionline_id')
+                ->distinct()
+                ->pluck('m_requisitionline_id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+            if (!empty($linkedLineIds)) {
+                $message = count($linkedLineIds) === 1
+                    ? 'Cannot delete requisition line because it is already linked to a Purchase Order line.'
+                    : 'Cannot delete requisition lines because one or more selected lines are already linked to Purchase Order lines.';
+
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'message' => $message,
+                        'linked_line_ids' => $linkedLineIds,
+                    ], 422);
+                }
+
+                return back()->with('error', $message);
+            }
+
             $deletedCount = 0;
             $errors = [];
 
