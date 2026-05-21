@@ -30,6 +30,7 @@ Recent project updates are tracked below.
 | Timestamp | Description |
 | --- | --- |
 | 2026-05-21 19:11:26 WIB | Update Module Requisition dan Purchase Order |
+| 2026-05-21 19:11:26 WIB | Add delete validation for requisition lines linked to PO |
 
 ## Technology Stack
 
@@ -409,13 +410,6 @@ php artisan optimize:clear
 - Check `.env` database credentials
 - Ensure database server is running
 - Verify database exists
-
-## 🔄 Update Log
-
-### [2025-12-29]
-- Added Date Picker in Statistics Chart
-### [2025-12-29 19:22]
-- Update synchronize modul Requisition dan Purchase Order
 
 ## License
 
