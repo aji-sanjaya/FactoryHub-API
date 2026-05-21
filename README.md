@@ -414,6 +414,8 @@ php artisan optimize:clear
 
 ### [2025-12-29]
 - Added Date Picker in Statistics Chart
+### [2025-12-29 19:22]
+- Update synchronize modul Requisition dan Purchase Order
 
 ## License
 
