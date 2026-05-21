@@ -25,7 +25,11 @@ Based on the menu structure and active application routes in this repository, th
 
 ## Update Log
 
-* **2026-05-21 19:11:26 WIB** - Update Module Requisition dan Purchase Order
+Recent project updates are tracked below.
+
+| Timestamp | Description |
+| --- | --- |
+| 2026-05-21 19:11:26 WIB | Update Module Requisition dan Purchase Order |
 
 ## Technology Stack
 
