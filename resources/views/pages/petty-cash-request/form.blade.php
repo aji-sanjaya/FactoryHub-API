@@ -376,14 +376,14 @@
                 console.log('Select2 plugin exists:', typeof $.fn.select2 !== 'undefined');
                 
                 // Check if elements exist
-                var elements = ['#org_id', '#ad_user_id', '#c_currency_id', '#c_doctype_id', '#dpk_cost_center_id'];
+                var elements = ['#org_id', '#ad_user_id', '#c_currency_id', '#c_doctype_id', '#c_costcenter_id'];
                 elements.forEach(function(selector) {
                     var el = $(selector);
                     console.log('Element ' + selector + ': exists=' + (el.length > 0) + ', is visible=' + el.is(':visible'));
                 });
                 
                 // Initialize Select2 for all dropdowns
-                $('#org_id, #ad_user_id, #c_currency_id, #c_doctype_id, #dpk_cost_center_id').select2({
+                $('#org_id, #ad_user_id, #c_currency_id, #c_doctype_id, #c_costcenter_id').select2({
                     width: '100%',
                     placeholder: '- Select -'
                 });
@@ -475,7 +475,7 @@
                 var userId = $('#ad_user_id').val();
                 var currencyId = $('#c_currency_id').val();
                 var docTypeId = $('#c_doctype_id').val();
-                var costCenterId = $('#dpk_cost_center_id').val();
+                var costCenterId = $('#c_costcenter_id').val();
 
                 var description = document.getElementById('description') ? document.getElementById('description').value : '';
                 var name = document.getElementById('name') ? document.getElementById('name').value : '';
@@ -522,7 +522,7 @@
                 window.isHeaderSubmitting = true;
 
                 var isNew = {{ $isNew ? 'true' : 'false' }};
-                var requestId = {{ isset($request) ? $request->dpk_pettycash_request_id : 'null' }};
+                var requestId = {{ isset($request) ? $request->adw_pettycash_request_id : 'null' }};
 
                 // Show loading
                 Swal.fire({

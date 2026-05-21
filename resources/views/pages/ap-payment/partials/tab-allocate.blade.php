@@ -1,6 +1,6 @@
 {{-- Allocate Tab (linking AP Invoices to this payment) --}}
 @php
-    $isReadOnly = !is_null($payment) && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']);
+    $isReadOnly = !is_null($payment) && in_array($payment->docstatus, config('idempiere.ap-payment.statuses.read_only', []));
     $canEdit = !$isReadOnly;
     $encDocId = $docIdParam;
 @endphp
@@ -52,7 +52,7 @@
                             </th>
                         @endif
                         <th
-                            class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-12 text-center">
+                            class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-12">
                             #</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                             Invoice No</th>

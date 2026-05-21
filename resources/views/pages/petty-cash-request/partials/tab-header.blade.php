@@ -139,12 +139,12 @@
                     <label
                         class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Cost Center</label>
                     <div class="col-span-1 sm:col-span-2">
-                        <select id="dpk_cost_center_id" name="dpk_cost_center_id" {{ $isReadOnly ? 'disabled' : '' }}
+                        <select id="c_costcenter_id" name="c_costcenter_id" {{ $isReadOnly ? 'disabled' : '' }}
                             class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
                             <option value="">- Select Cost Center -</option>
                             @if(isset($costCenters))
                                 @foreach($costCenters as $cc)
-                                    <option value="{{ $cc->id }}" {{ (isset($request) && $request->dpk_cost_center_id == $cc->id) ? 'selected' : '' }}>
+                                    <option value="{{ $cc->id }}" {{ (isset($request) && $request->c_costcenter_id == $cc->id) ? 'selected' : '' }}>
                                         {{ $cc->text }}
                                     </option>
                                 @endforeach
@@ -241,7 +241,7 @@
             console.log('Select2 initialization on tab-header - jQuery and Select2 available');
             
             // Initialize all select elements
-            $('#org_id, #c_bpartner_id, #ad_user_id, #c_currency_id, #c_doctype_id, #dpk_cost_center_id').each(function() {
+            $('#org_id, #c_bpartner_id, #ad_user_id, #c_currency_id, #c_doctype_id, #c_costcenter_id').each(function() {
                 if (!$(this).hasClass('select2-hidden-accessible')) {
                     console.log('Initializing select2 for: ' + this.id);
                     $(this).select2({

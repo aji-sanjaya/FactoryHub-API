@@ -3,6 +3,7 @@
 @section('content')
 
     @php 
+        $purchaseOrderConfig = $purchaseOrderConfig ?? config('idempiere.create-po');
         $isNew = is_null($order);
         // Active tab from controller or default
         $activeTab = $activeTab ?? 'header';
@@ -33,7 +34,7 @@
         // No need to recalculate here
 
         // Default Payment Term ID
-        $paymentTermId = $isNew ? 1000007 : ($order->c_paymentterm_id ?? null);
+        $paymentTermId = $isNew ? $purchaseOrderConfig['defaults']['payment_term_id'] : ($order->c_paymentterm_id ?? null);
 
         // Current Org ID Selection
         $currentOrgId = $isNew ? $defaultOrgId : $order->ad_org_id;
@@ -47,8 +48,22 @@
         // Read Only Logic
         $isReadOnly = false;
         if (!$isNew && isset($order->docstatus)) {
-            $isReadOnly = in_array($order->docstatus, ['CO', 'CL', 'VO', 'RE']);
+            $isReadOnly = in_array($order->docstatus, $purchaseOrderConfig['statuses']['read_only'], true);
         }
+
+        $headerBadgeClasses = $purchaseOrderConfig['statuses']['header_badge_classes'] ?? [];
+        $headerStatusColor = $headerBadgeClasses[$order->docstatus ?? 'DR'] ?? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+        $printableStatuses = $purchaseOrderConfig['statuses']['printable'] ?? [];
+        $workflowConfig = $purchaseOrderConfig['workflow'] ?? [];
+        $reactivateStatuses = $workflowConfig['reactivate_from'] ?? [];
+        $completeVoidStatuses = $workflowConfig['complete_void_from'] ?? [];
+        $standardBlockedStatuses = $workflowConfig['standard_blocked'] ?? [];
+        $completeAction = $workflowConfig['complete_action'] ?? 'CO';
+        $prepareAction = $workflowConfig['prepare_action'] ?? 'PR';
+        $voidAction = $workflowConfig['void_action'] ?? 'VO';
+        $reactivateAction = $workflowConfig['reactivate_action'] ?? 'RE';
+        $workflowActionLabels = $workflowConfig['action_labels'] ?? [];
+        $workflowConfirmationMessages = $workflowConfig['confirmation_messages'] ?? [];
     @endphp
 
     <!-- Header / Breadcrumb -->
@@ -68,15 +83,6 @@
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
                         @if(!$isNew)
-                            @php
-                                $headerStatusColor = match($order ? $order->docstatus : 'DR') {
-                                    'NA', 'VO', 'RE' => 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-                                    'CO', 'CL', 'AP' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-                                    'IP' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-                                    'DR' => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-                                    default => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                                };
-                            @endphp
                             <span
                                 class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $headerStatusColor }}">
                                 {{ $status }}
@@ -90,7 +96,7 @@
 
             <div class="flex gap-3">
                 <!-- Always Visible Action (Print) -->
-                @if(isset($order) && in_array($order->docstatus, ['IP', 'CO', 'DR']))
+                @if(isset($order) && in_array($order->docstatus, $printableStatuses, true))
                     <button type="button"
                         onclick="openPrintModal('{{ route('purchase-order.print', \Illuminate\Support\Facades\Crypt::encryptString($order->c_order_id)) }}')"
                         class="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-4 focus:ring-gray-200 shadow-sm transition-all gap-2 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -282,7 +288,7 @@
         <script>
             // Initialization Function to be called on ready a    nd after AJAX
             function initScripts() {
-                $('#c_bpartner_id, #org_id, #warehouse_id, #pricelist_id, #priority_rule, #c_paymentterm_id, #dpk_ad_user_checked_id, #dpk_ad_user_approved_id, #doc_type_id, #c_tax_id').select2({
+                $('#c_bpartner_id, #org_id, #warehouse_id, #pricelist_id, #priority_rule, #c_paymentterm_id, #adw_ad_user_checked_id, #adw_ad_user_approved_id, #doc_type_id, #c_tax_id').select2({
                     width: '100%',
                     placeholder: '- Select -'
                 });
@@ -669,6 +675,13 @@
                 $('#m_product_id').val(null).trigger('change');
                 $('#product_uom').text('Unit');
 
+                // Reset submit button state (in case previous save left it in loading state)
+                const submitBtn = document.querySelector('#createLineForm button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Save Line Item`;
+                }
+
                 // Hide Requisition Info
                 const reqInfoDiv = document.getElementById('requisition_info_container');
                 if (reqInfoDiv) reqInfoDiv.classList.add('hidden');
@@ -710,11 +723,22 @@
 
                 $('#lines-list-container').addClass('hidden');
                 $('#lines-create-form').removeClass('hidden');
+
+                // Reset withholding fields
+                const whCheckbox = document.getElementById('line_is_withholding');
+                const whRate = document.getElementById('line_withholding_rate');
+                const whAmt = document.getElementById('line_withholding_amount');
+                if (whCheckbox) whCheckbox.checked = false;
+                if (whRate) { whRate.disabled = true; whRate.value = '2'; }
+                if (whAmt) whAmt.value = '0.00';
             }
 
             function hideCreateLineForm() {
                 $('#lines-create-form').addClass('hidden');
                 $('#lines-list-container').removeClass('hidden');
+                // Also clear the queue so cancel properly aborts sequential processing
+                reqLineQueue = [];
+                loadTabContent('lines');
             }
 
             window.toggleSelectAllLines = function (checkbox) {
@@ -903,7 +927,7 @@
                 input.value = formattedInteger + decimalPart;
             }
 
-            function editLine(lineId, productText, productId, qty, price, description, lineNumber, uomName, requisitionLineId, requisitionDocNo) {
+            function editLine(lineId, productText, productId, qty, price, description, lineNumber, uomName, requisitionLineId, requisitionDocNo, isWithholding, withholdingRate, withholdingAmount) {
                 // Show the form (also resets requisition state)
                 showCreateLineForm();
 
@@ -940,6 +964,21 @@
                 });
 
                 document.getElementById('line_description').value = description || '';
+
+                // Populate withholding fields
+                const whCheckbox = document.getElementById('line_is_withholding');
+                const whRate = document.getElementById('line_withholding_rate');
+                const whAmt = document.getElementById('line_withholding_amount');
+                if (whCheckbox) {
+                    whCheckbox.checked = !!isWithholding;
+                    if (whRate) {
+                        whRate.disabled = !isWithholding;
+                        whRate.value = withholdingRate || '2';
+                    }
+                    if (whAmt) {
+                        whAmt.value = withholdingAmount || '0.00';
+                    }
+                }
 
                 // Tax from Header (already populated by showCreateLineForm)
                 // No additional action needed as it's read-only
@@ -1065,28 +1104,46 @@
 
                 axios[method](url, data)
                     .then(res => {
-                        // Show Success
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Saved!',
-                            text: 'Line item saved successfully.',
-                            timer: 1500,
-                            showConfirmButton: false
-                        }).then(() => {
-                            // Update Totals if returned
-                            if (res.data.grandtotal) {
-                                 const taxEl = document.getElementById('txt_tax_amount');
-                                 const grandEl = document.getElementById('txt_grand_total');
-                                 if (taxEl) taxEl.value = res.data.tax_amount;
-                                 if (grandEl) grandEl.value = res.data.grandtotal;
-                            }
+                        // Update Totals if returned
+                        if (res.data.grandtotal) {
+                             const totalLinesEl = document.getElementById('txt_total_lines');
+                             const taxEl = document.getElementById('txt_tax_amount');
+                             const grandEl = document.getElementById('txt_grand_total');
+                             const whtEl = document.getElementById('txt_withholding_total');
+                             if (totalLinesEl && res.data.total_lines !== undefined) totalLinesEl.value = res.data.total_lines;
+                             if (taxEl) taxEl.value = res.data.tax_amount;
+                             if (grandEl) grandEl.value = res.data.grand_total_net ?? res.data.grandtotal;
+                             if (whtEl && res.data.withholding_total !== undefined) whtEl.value = res.data.withholding_total;
+                        }
 
-                            // Reload Lines Tab
-                            loadTabContent('lines');
-                            
-                            // Update tax lock status after save
-                            setTimeout(() => lockTaxIfHasLines(), 500);
-                        });
+                        // If there are more queued requisition lines, process the next one
+                        if (reqLineQueue.length > 0) {
+                            // Do NOT reload tab here — it would replace the DOM and break the form.
+                            // Just show a brief toast, then open the next form directly.
+                            setTimeout(() => lockTaxIfHasLines(), 300);
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Saved!',
+                                html: `Line saved. Loading next item (<b>${reqLineQueue.length}</b> remaining)...`,
+                                timer: 1200,
+                                showConfirmButton: false,
+                                timerProgressBar: true
+                            }).then(() => {
+                                processNextQueuedRequisitionLine();
+                            });
+                        } else {
+                            // Last item — show normal success and reload tab
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Saved!',
+                                text: 'Line item saved successfully.',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => {
+                                loadTabContent('lines');
+                                setTimeout(() => lockTaxIfHasLines(), 500);
+                            });
+                        }
                     })
                     .catch(err => {
                         console.error(err);
@@ -1121,15 +1178,15 @@
                 const datePromised = document.getElementById('date_promised') ? document.getElementById('date_promised').value : '';
                 const priorityRule = $('#priority_rule').val();
                 const paymentTermId = $('#c_paymentterm_id').val();
-                const userCheckedId = $('#dpk_ad_user_checked_id').val();
-                const userApprovedId = $('#dpk_ad_user_approved_id').val();
+                const userCheckedId = $('#adw_ad_user_checked_id').val();
+                const userApprovedId = $('#adw_ad_user_approved_id').val();
                 const taxId = $('#c_tax_id').val();
 
                 // Assuming this is part of an initScripts-like block or a document ready function
                 if ($('#priority_rule').length) $('#priority_rule').select2({ minimumResultsForSearch: 10 });
                 if ($('#c_paymentterm_id').length) $('#c_paymentterm_id').select2(); 
-                if ($('#dpk_ad_user_checked_id').length) $('#dpk_ad_user_checked_id').select2();
-                if ($('#dpk_ad_user_approved_id').length) $('#dpk_ad_user_approved_id').select2(); 
+                if ($('#adw_ad_user_checked_id').length) $('#adw_ad_user_checked_id').select2();
+                if ($('#adw_ad_user_approved_id').length) $('#adw_ad_user_approved_id').select2(); 
                  
                 if ($('#c_tax_id').length) $('#c_tax_id').select2({ width: '100%' });
 
@@ -1147,8 +1204,8 @@
                     doc_type_id: docTypeId,
                     priority_rule: priorityRule,
                     c_paymentterm_id: paymentTermId,
-                    dpk_ad_user_checked_id: userCheckedId,
-                    dpk_ad_user_approved_id: userApprovedId,
+                    adw_ad_user_checked_id: userCheckedId,
+                    adw_ad_user_approved_id: userApprovedId,
                     c_tax_id: taxId,
                     c_project_id: projectId
                 };
@@ -1258,37 +1315,21 @@
                 }
             }
 
+            const PURCHASE_ORDER_ACTION_LABELS = @json($workflowActionLabels);
+            const PURCHASE_ORDER_ACTION_CONFIRMATIONS = @json($workflowConfirmationMessages);
+
             function executeDocumentAction(action) {
                 closeDocumentActionModal();
 
-                let actionText = '';
-                let confirmText = '';
-
-                switch (action) {
-                    case 'CO':
-                        actionText = 'Complete';
-                        confirmText = 'Are you sure you want to complete this document?';
-                        break;
-                    case 'PR':
-                        actionText = 'Prepare';
-                        confirmText = 'Are you sure you want to prepare this document?';
-                        break;
-                    case 'VO':
-                        actionText = 'Void';
-                        confirmText = 'Are you sure you want to void this document? This action cannot be undone!';
-                        break;
-                    case 'RE':
-                        actionText = 'Re-Activate';
-                        confirmText = 'Are you sure you want to re-activate this document? This will set it back to In Progress.';
-                        break;
-                }
+                let actionText = PURCHASE_ORDER_ACTION_LABELS[action] || action;
+                let confirmText = PURCHASE_ORDER_ACTION_CONFIRMATIONS[action] || 'Are you sure you want to process this document?';
 
                 Swal.fire({
                     title: `${actionText} Document?`,
                     text: confirmText,
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonColor: action === 'VO' ? '#ef4444' : '#4f46e5',
+                    confirmButtonColor: action === '{{ $voidAction }}' ? '#ef4444' : '#4f46e5',
                     cancelButtonColor: '#6b7280',
                     confirmButtonText: `Yes, ${actionText.toLowerCase()} it!`,
                     cancelButtonText: 'Cancel'
@@ -1635,21 +1676,21 @@
                     $reqStatus = isset($order) ? $order->docstatus : 'DR';
                 @endphp
 
-                @if($reqStatus == 'CO')
+                @if(in_array($reqStatus, $reactivateStatuses, true))
                     <!-- Complete: Re-Activate and Void options -->
-                    <button type="button" onclick="executeDocumentAction('RE')"
+                    <button type="button" onclick="executeDocumentAction('{{ $reactivateAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded-lg transition-colors dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30 dark:border-yellow-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                             </svg>
-                            <span class="font-medium text-yellow-700 dark:text-yellow-300">Re-Activate</span>
+                            <span class="font-medium text-yellow-700 dark:text-yellow-300">{{ $workflowActionLabels[$reactivateAction] ?? 'Re-Activate' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                         </svg>
                     </button>
-                    <button type="button" onclick="executeDocumentAction('VO')"
+                    <button type="button" onclick="executeDocumentAction('{{ $voidAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:border-red-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
@@ -1658,7 +1699,7 @@
                                     d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636">
                                 </path>
                             </svg>
-                            <span class="font-medium text-red-700 dark:text-red-300">Void</span>
+                            <span class="font-medium text-red-700 dark:text-red-300">{{ $workflowActionLabels[$voidAction] ?? 'Void' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1666,9 +1707,9 @@
                         </svg>
                     </button>
 
-                @elseif(in_array($reqStatus, ['NA', 'IP']))
+                @elseif(in_array($reqStatus, $completeVoidStatuses, true))
                     <!-- Not Approved: Complete and Void options -->
-                    <button type="button" onclick="executeDocumentAction('CO')"
+                    <button type="button" onclick="executeDocumentAction('{{ $completeAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors dark:bg-green-900/20 dark:hover:bg-green-900/30 dark:border-green-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
@@ -1676,7 +1717,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            <span class="font-medium text-green-700 dark:text-green-300">Complete</span>
+                            <span class="font-medium text-green-700 dark:text-green-300">{{ $workflowActionLabels[$completeAction] ?? 'Complete' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1684,7 +1725,7 @@
                         </svg>
                     </button>
 
-                    <button type="button" onclick="executeDocumentAction('VO')"
+                    <button type="button" onclick="executeDocumentAction('{{ $voidAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:border-red-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
@@ -1693,7 +1734,7 @@
                                     d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636">
                                 </path>
                             </svg>
-                            <span class="font-medium text-red-700 dark:text-red-300">Void</span>
+                            <span class="font-medium text-red-700 dark:text-red-300">{{ $workflowActionLabels[$voidAction] ?? 'Void' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1701,10 +1742,10 @@
                         </svg>
                     </button>
 
-                @elseif(!in_array($reqStatus, ['CL', 'VO', 'RE', 'IP']))
+                @elseif(!in_array($reqStatus, $standardBlockedStatuses, true))
                     <!-- Draft and other statuses: Complete, Prepare, Void -->
 
-                    <button type="button" onclick="executeDocumentAction('CO')"
+                    <button type="button" onclick="executeDocumentAction('{{ $completeAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors dark:bg-green-900/20 dark:hover:bg-green-900/30 dark:border-green-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
@@ -1712,7 +1753,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            <span class="font-medium text-green-700 dark:text-green-300">Complete</span>
+                            <span class="font-medium text-green-700 dark:text-green-300">{{ $workflowActionLabels[$completeAction] ?? 'Complete' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1720,7 +1761,7 @@
                         </svg>
                     </button>
 
-                    <button type="button" onclick="executeDocumentAction('PR')"
+                    <button type="button" onclick="executeDocumentAction('{{ $prepareAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors dark:bg-blue-900/20 dark:hover:bg-blue-900/30 dark:border-blue-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
@@ -1729,7 +1770,7 @@
                                     d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
                                 </path>
                             </svg>
-                            <span class="font-medium text-blue-700 dark:text-blue-300">Prepare</span>
+                            <span class="font-medium text-blue-700 dark:text-blue-300">{{ $workflowActionLabels[$prepareAction] ?? 'Prepare' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1737,7 +1778,7 @@
                         </svg>
                     </button>
 
-                    <button type="button" onclick="executeDocumentAction('VO')"
+                    <button type="button" onclick="executeDocumentAction('{{ $voidAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:border-red-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
@@ -1746,7 +1787,7 @@
                                     d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636">
                                 </path>
                             </svg>
-                            <span class="font-medium text-red-700 dark:text-red-300">Void</span>
+                            <span class="font-medium text-red-700 dark:text-red-300">{{ $workflowActionLabels[$voidAction] ?? 'Void' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1858,33 +1899,82 @@
             const qty = parseFloat(qtyStr) || 0;
             const price = parseFloat(priceStr) || 0;
             
-            // Basic calculation without tax rate for now, as rate is not easily available in select option
-            // If tax calculation is needed, we need tax rate data.
-            // User asked "tampilkan amount totalnya juga". "Line Net Amt" usually is Qty * Price.
-            // Grand Total includes tax.
-            // Let's assume this is Line Net Amount for now.
-            
-            const total = qty * price;
-            
+            const lineNet = qty * price;
+
+            // Recalculate withholding amount whenever line total changes
+            calcLineWithholdingAmt();
+
+            // Get tax rate from the header tax select (data-rate attribute)
+            const taxSelect = document.getElementById('c_tax_id');
+            let taxRate = 0;
+            if (taxSelect && taxSelect.selectedIndex >= 0) {
+                const selectedOpt = taxSelect.options[taxSelect.selectedIndex];
+                taxRate = parseFloat(selectedOpt?.dataset?.rate) || 0;
+            }
+            const taxAmt = lineNet * taxRate / 100;
+
+            // Withholding amount (already computed by calcLineWithholdingAmt)
+            const whAmtStr = (document.getElementById('line_withholding_amount')?.value || '0').replace(/,/g, '');
+            const whAmt = parseFloat(whAmtStr) || 0;
+
+            // Line Amount = Net + Tax - Withholding
+            const total = lineNet + taxAmt - whAmt;
+
             document.getElementById('line_amount').value = total.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             });
         }
-        
+
+        function onLineWithholdingToggle(checked) {
+            const rateInput = document.getElementById('line_withholding_rate');
+            rateInput.disabled = !checked;
+            if (checked && (!rateInput.value || parseFloat(rateInput.value) === 0)) {
+                rateInput.value = '2';
+            }
+            calculateLineTotal();
+        }
+
+        function calcLineWithholdingAmt() {
+            const checkbox = document.getElementById('line_is_withholding');
+            const amtInput = document.getElementById('line_withholding_amount');
+
+            if (!checkbox || !checkbox.checked) {
+                if (amtInput) amtInput.value = '0.00';
+                return;
+            }
+
+            const qtyStr = (document.getElementById('line_qty')?.value || '').replace(/,/g, '');
+            const priceStr = (document.getElementById('line_price')?.value || '').replace(/,/g, '');
+            const rate = parseFloat(document.getElementById('line_withholding_rate')?.value) || 0;
+
+            const qty = parseFloat(qtyStr) || 0;
+            const price = parseFloat(priceStr) || 0;
+            const lineAmt = qty * price;
+            const withholdingAmt = lineAmt * rate / 100;
+
+            if (amtInput) {
+                amtInput.value = withholdingAmt.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+        }
+
         // =============================================
         // REQUISITION MODAL - Table-based Implementation
         // =============================================
         let reqCurrentPage = 1;
         let reqSearchTimer = null;
-        let reqSelectedItem = null; // Stores the single selected requisition line object
+        let reqSelectedItems = []; // Multi-select: array of selected requisition line objects
+        let reqLineQueue = [];    // Queue for sequential processing after confirmRequisitionAdd
 
         function openRequisitionModal() {
             const modal = document.getElementById('requisitionSelectionModal');
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
             // Reset state
-            reqSelectedItem = null;
+            reqSelectedItems = [];
             document.getElementById('req_selected_count').textContent = 'No line selected';
             document.getElementById('req_confirm_btn').disabled = true;
             document.getElementById('req_search_input').value = '';
@@ -1896,7 +1986,7 @@
             const modal = document.getElementById('requisitionSelectionModal');
             modal.classList.add('hidden');
             document.body.style.overflow = '';
-            reqSelectedItem = null;
+            reqSelectedItems = [];
         }
 
         function debounceReqSearch(value) {
@@ -1946,11 +2036,14 @@
             tbody.innerHTML = '';
 
             results.forEach(item => {
-                const isSelected = reqSelectedItem && reqSelectedItem.id === item.id;
+                const isSelected = reqSelectedItems.some(s => s.id === item.id);
                 const tr = document.createElement('tr');
                 tr.className = `hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`;
                 tr.dataset.id = item.id;
-                tr.onclick = function() { selectReqRow(this, item); };
+                tr.onclick = function() {
+                    const cb = this.querySelector('.req-row-checkbox');
+                    if (cb) { cb.checked = !cb.checked; onReqCheckboxChange(cb, item); }
+                };
 
                 tr.innerHTML = `
                     <td class="px-4 py-3">
@@ -1972,53 +2065,89 @@
                 `;
                 tbody.appendChild(tr);
             });
-        }
 
-        function selectReqRow(tr, item) {
-            // Deselect all rows first
-            document.querySelectorAll('#req_table_body tr').forEach(row => {
-                row.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
-                const cb = row.querySelector('.req-row-checkbox');
-                if (cb) cb.checked = false;
-            });
-
-            // Select this row
-            tr.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
-            const cb = tr.querySelector('.req-row-checkbox');
-            if (cb) cb.checked = true;
-
-            reqSelectedItem = item;
-            updateReqSelectionUI();
+            // Sync master checkbox state after render
+            syncReqMasterCheckbox();
         }
 
         function onReqCheckboxChange(checkbox, item) {
+            const tr = checkbox.closest('tr');
             if (checkbox.checked) {
-                // Uncheck all others
-                document.querySelectorAll('.req-row-checkbox').forEach(cb => {
-                    if (cb !== checkbox) {
-                        cb.checked = false;
-                        cb.closest('tr').classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
-                    }
-                });
-                checkbox.closest('tr').classList.add('bg-blue-50', 'dark:bg-blue-900/20');
-                reqSelectedItem = item;
+                if (!reqSelectedItems.some(s => s.id === item.id)) {
+                    reqSelectedItems.push(item);
+                }
+                if (tr) tr.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
             } else {
-                checkbox.closest('tr').classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
-                reqSelectedItem = null;
+                reqSelectedItems = reqSelectedItems.filter(s => s.id !== item.id);
+                if (tr) tr.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
             }
+            syncReqMasterCheckbox();
             updateReqSelectionUI();
         }
 
         function toggleAllReqCheckboxes(masterCb) {
-            // "Select all" is not applicable for single-select mode; reset it
-            masterCb.checked = false;
+            const checkboxes = document.querySelectorAll('.req-row-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = masterCb.checked;
+                const tr = cb.closest('tr');
+                // Get the item data from the data-id then find from rendered table
+                if (masterCb.checked) {
+                    if (tr) tr.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
+                } else {
+                    if (tr) tr.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+                }
+            });
+
+            if (masterCb.checked) {
+                // Collect all items currently rendered in table
+                checkboxes.forEach(cb => {
+                    const tr = cb.closest('tr');
+                    if (!tr) return;
+                    // Retrieve item from the onchange attribute via data injection
+                    const onchangeAttr = cb.getAttribute('onchange') || '';
+                    const idMatch = cb.dataset.id;
+                    if (idMatch && !reqSelectedItems.some(s => String(s.id) === String(idMatch))) {
+                        // Extract item from tr's onclick which has the full object
+                        // We stored item JSON in the checkbox onchange, parse it
+                        const match = onchangeAttr.match(/onReqCheckboxChange\(this,\s*(.+)\)$/);
+                        if (match) {
+                            try {
+                                // The JSON is HTML-entity-encoded, decode it
+                                const raw = match[1].replace(/&quot;/g, '"');
+                                const item = JSON.parse(raw);
+                                if (!reqSelectedItems.some(s => s.id === item.id)) {
+                                    reqSelectedItems.push(item);
+                                }
+                            } catch (e) { /* skip */ }
+                        }
+                    }
+                });
+            } else {
+                // Remove all currently-visible items from selected
+                const visibleIds = Array.from(checkboxes).map(cb => String(cb.dataset.id));
+                reqSelectedItems = reqSelectedItems.filter(s => !visibleIds.includes(String(s.id)));
+            }
+
+            updateReqSelectionUI();
+        }
+
+        function syncReqMasterCheckbox() {
+            const masterCb = document.getElementById('req_select_all');
+            if (!masterCb) return;
+            const checkboxes = document.querySelectorAll('.req-row-checkbox');
+            if (checkboxes.length === 0) { masterCb.checked = false; masterCb.indeterminate = false; return; }
+            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+            if (checkedCount === 0) { masterCb.checked = false; masterCb.indeterminate = false; }
+            else if (checkedCount === checkboxes.length) { masterCb.checked = true; masterCb.indeterminate = false; }
+            else { masterCb.checked = false; masterCb.indeterminate = true; }
         }
 
         function updateReqSelectionUI() {
             const countEl = document.getElementById('req_selected_count');
             const confirmBtn = document.getElementById('req_confirm_btn');
-            if (reqSelectedItem) {
-                countEl.innerHTML = `<span class="font-medium text-blue-700 dark:text-blue-400">Selected: ${escapeHtml(reqSelectedItem.po_number)} — ${escapeHtml(reqSelectedItem.product_name)}</span>`;
+            const n = reqSelectedItems.length;
+            if (n > 0) {
+                countEl.innerHTML = `<span class="font-medium text-blue-700 dark:text-blue-400">${n} line${n > 1 ? 's' : ''} selected</span>`;
                 confirmBtn.disabled = false;
             } else {
                 countEl.textContent = 'No line selected';
@@ -2064,29 +2193,41 @@
         }
 
         function confirmRequisitionAdd() {
-            if (!reqSelectedItem) {
-                Swal.fire('No Selection', 'Please select a requisition line first.', 'warning');
+            if (reqSelectedItems.length === 0) {
+                Swal.fire('No Selection', 'Please select at least one requisition line first.', 'warning');
                 return;
             }
 
-            const item = reqSelectedItem;
+            // Build a queue from all selected items (clone array)
+            reqLineQueue = [...reqSelectedItems];
 
             // Close Modal
             closeRequisitionModal();
 
-            // Open Line Form
+            // Process first item
+            processNextQueuedRequisitionLine();
+        }
+
+        function processNextQueuedRequisitionLine() {
+            if (reqLineQueue.length === 0) return;
+
+            const item = reqLineQueue.shift(); // take first item
+
+            // Open/reset Line Form
             showCreateLineForm();
 
             // 1. Set Hidden Requisition Line ID
             const reqLineIdField = document.getElementById('m_requisitionline_id');
             if (reqLineIdField) reqLineIdField.value = item.id;
 
-            // Show Requisition Info Banner
+            // Show Requisition Info Banner (with queue counter if more items remain)
             const reqInfoDiv = document.getElementById('requisition_info_container');
             const reqInfoText = document.getElementById('requisition_info_text');
             if (reqInfoDiv && reqInfoText) {
                 reqInfoDiv.classList.remove('hidden');
-                reqInfoText.textContent = `${item.po_number} — ${item.product_value} — ${item.product_name} (Qty: ${item.qty})`;
+                const remaining = reqLineQueue.length;
+                const queueNote = remaining > 0 ? ` <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded">${remaining} more in queue</span>` : '';
+                reqInfoText.innerHTML = `${escapeHtml(item.po_number)} — ${escapeHtml(item.product_value)} — ${escapeHtml(item.product_name)} (Qty: ${item.qty})${queueNote}`;
             }
 
             // 2. Set Product via Select2 then DISABLE it (locked to requisition)

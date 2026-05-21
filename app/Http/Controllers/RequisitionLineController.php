@@ -40,6 +40,8 @@ class RequisitionLineController extends Controller
 
     public function store(Request $request)
     {
+        $requisitionConfig = config('idempiere.create-pr');
+
         // Validation
         $validated = $request->validate([
             'document_id' => 'required',
@@ -50,6 +52,7 @@ class RequisitionLineController extends Controller
         ]);
 
         $documentId = $request->input('document_id');
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
 
         try {
             $requisitionId = \Illuminate\Support\Facades\Crypt::decryptString($documentId);
@@ -65,9 +68,9 @@ class RequisitionLineController extends Controller
             }
 
             // Get max line number from existing lines and organization
-            $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($requisitionId) {
-                return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->get('https://idempiere.dpkgreenlog.id/api/v1/models/m_requisition/' . $requisitionId);
+            $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $requisitionId) {
+                return \Illuminate\Support\Facades\Http::withoutVerifying()->withToken($t)
+                    ->get("{$baseUrl}/models/m_requisition/{$requisitionId}");
             });
 
             $maxLine = 0;
@@ -98,7 +101,7 @@ class RequisitionLineController extends Controller
                 return back()->with('error', 'Organization ID not found in requisition');
             }
 
-            $nextLine = $maxLine + 10;
+            $nextLine = $maxLine + $requisitionConfig['limits']['line_increment'];
 
             // Prepare payload for iDempiere API
             // Create line by updating the requisition with new M_Requisitionline array
@@ -121,9 +124,9 @@ class RequisitionLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($requisitionId, $payload) {
-                return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/m_requisition/' . $requisitionId, $payload);
+            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $requisitionId, $payload) {
+                return \Illuminate\Support\Facades\Http::withoutVerifying()->withToken($t)
+                    ->put("{$baseUrl}/models/m_requisition/{$requisitionId}", $payload);
             });
 
             \Illuminate\Support\Facades\Log::info('API Response', [
@@ -205,6 +208,8 @@ class RequisitionLineController extends Controller
             'description' => 'nullable|string',
         ]);
 
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+
         try {
             // Get session data for API call
             $token = \Illuminate\Support\Facades\Session::get('api_token');
@@ -214,6 +219,40 @@ class RequisitionLineController extends Controller
                     return response()->json(['message' => 'Authentication required'], 401);
                 }
                 return back()->with('error', 'Authentication required');
+            }
+
+            $requisitionLine = \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('m_requisitionline')
+                ->where('m_requisitionline_id', $validated['line_id'])
+                ->first(['m_requisitionline_id', 'qty']);
+
+            if (!$requisitionLine) {
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => 'Requisition line not found'], 404);
+                }
+                return back()->with('error', 'Requisition line not found');
+            }
+
+            $totalOrderedQty = (float) \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('c_orderline as ol')
+                ->join('c_order as o', 'o.c_order_id', '=', 'ol.c_order_id')
+                ->where('ol.m_requisitionline_id', $validated['line_id'])
+                ->whereNotIn('o.docstatus', ['VO', 'RE'])
+                ->sum('ol.qtyordered');
+
+            $requestedQty = (float) $validated['qty'];
+
+            if ($requestedQty < $totalOrderedQty) {
+                $message = sprintf(
+                    'Qty requisition tidak boleh lebih kecil dari total Qty Ordered pada Purchase Order. Qty Ordered saat ini: %s.',
+                    rtrim(rtrim(number_format($totalOrderedQty, 2, '.', ''), '0'), '.')
+                );
+
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => $message], 422);
+                }
+
+                return back()->with('error', $message);
             }
 
             // Prepare payload for iDempiere API (update existing line)
@@ -230,9 +269,9 @@ class RequisitionLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($validated, $payload) {
-                return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/m_requisitionline/' . $validated['line_id'], $payload);
+            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $validated, $payload) {
+                return \Illuminate\Support\Facades\Http::withoutVerifying()->withToken($t)
+                    ->put("{$baseUrl}/models/m_requisitionline/{$validated['line_id']}", $payload);
             });
 
             \Illuminate\Support\Facades\Log::info('API Response', [
@@ -307,6 +346,8 @@ class RequisitionLineController extends Controller
             'line_ids.*' => 'required|integer',
         ]);
 
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+
         try {
             // Get session data for API call
             $token = \Illuminate\Support\Facades\Session::get('api_token');
@@ -328,9 +369,9 @@ class RequisitionLineController extends Controller
                     'line_id' => $lineId
                 ]);
 
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($lineId) {
-                    return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->delete('https://idempiere.dpkgreenlog.id/api/v1/models/m_requisitionline/' . $lineId);
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $lineId) {
+                    return \Illuminate\Support\Facades\Http::withoutVerifying()->withToken($t)
+                        ->delete("{$baseUrl}/models/m_requisitionline/{$lineId}");
                 });
 
                 \Illuminate\Support\Facades\Log::info('API Response', [

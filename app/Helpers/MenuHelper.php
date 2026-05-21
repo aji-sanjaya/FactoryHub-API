@@ -4,71 +4,45 @@ namespace App\Helpers;
 
 class MenuHelper
 {
-    public static function getMainNavItems()
+    public static function getMainNavItems(?int $sortOrderMin = null, ?int $sortOrderMax = null)
     {
-        $roleId = session('idempiere_role'); // Assuming the role ID is stored in the session
+        return self::getSidebarNavItems($sortOrderMin, $sortOrderMax);
+    }
 
-        \Illuminate\Support\Facades\Log::info("MenuHelper Role ID: " . ($roleId ?? 'NOT_FOUND'));
+    public static function getWelcomeRootItems(?int $sortOrderMin = null, ?int $sortOrderMax = null)
+    {
+        $menus = self::fetchAuthorizedMenus();
 
-        if (!$roleId) {
-            return []; // No role, no menus
-        }
-
-        // Fetch all menus assigned to the current role
-        $menus = \Illuminate\Support\Facades\DB::connection('idempiere')
-            ->table('dpk_web_portal_menus as m')
-            ->join('dpk_web_portal_role_menus as rm', 'm.dpk_web_portal_menus_id', '=', 'rm.dpk_web_portal_menus_id')
-            ->where('rm.ad_role_id', $roleId)
-            ->where('m.isactive', 'Y')
-            ->where('rm.isactive', 'Y')
-            ->select('m.*')
-            ->orderBy('m.parent_id')
-            ->orderBy('m.sort_order')
-            ->get();
-
-        // Build a hierarchical tree
-        $tree = [];
         $itemsById = [];
+        $level1Items = [];
 
-        // First pass: Index all items
         foreach ($menus as $menu) {
-            $item = [
-                'id' => $menu->dpk_web_portal_menus_id,
-                'name' => $menu->name,
-                'path' => $menu->path,
-                'icon' => $menu->icon,
-                'pro' => $menu->pro === 'Y',
-                'subItems' => []
-            ];
-
-            // Remove null keys for cleaner structure
-            if (empty($item['path']))
-                unset($item['path']);
-            if (empty($item['icon']))
-                unset($item['icon']);
-
-            $itemsById[$menu->dpk_web_portal_menus_id] = $item;
+            $itemsById[$menu->adw_web_portal_menus_id] = self::makeMenuItem($menu);
         }
 
-        // Second pass: Build the tree
         foreach ($menus as $menu) {
-            if (!empty($menu->parent_id)) {
-                if (isset($itemsById[$menu->parent_id])) {
-                    $itemsById[$menu->parent_id]['subItems'][] = &$itemsById[$menu->dpk_web_portal_menus_id];
+            $menuId = $menu->adw_web_portal_menus_id;
+
+            if (self::isLevel1Menu($menu)) {
+                if (!self::matchesSortOrder($menu, $sortOrderMin, $sortOrderMax)) {
+                    continue;
                 }
-            } else {
-                $tree[] = &$itemsById[$menu->dpk_web_portal_menus_id];
+
+                $level1Items[$menuId] = &$itemsById[$menuId];
+                continue;
+            }
+
+            if (self::isLevel2Menu($menu) && isset($level1Items[$menu->rootparent_id])) {
+                $level1Items[$menu->rootparent_id]['subItems'][] = &$itemsById[$menuId];
+                continue;
+            }
+
+            if (self::isLevel3Menu($menu) && isset($itemsById[$menu->parent_id])) {
+                $itemsById[$menu->parent_id]['subItems'][] = &$itemsById[$menuId];
             }
         }
 
-        // Third pass: Remove empty subItems arrays for clean output
-        foreach ($itemsById as &$item) {
-            if (empty($item['subItems'])) {
-                unset($item['subItems']);
-            }
-        }
-
-        return collect($tree)->toArray();
+        return array_values(array_filter(array_map([self::class, 'cleanupMenuItem'], $level1Items)));
     }
 
     public static function getMenuGroups()
@@ -79,6 +53,35 @@ class MenuHelper
                 'items' => self::getMainNavItems()
             ]
         ];
+    }
+
+    public static function getFirstLevel3PathForRoot(int $rootMenuId, ?int $sortOrderMin = null, ?int $sortOrderMax = null): ?string
+    {
+        $menus = self::fetchAuthorizedMenus();
+
+        $level2Menus = $menus
+            ->filter(function ($menu) use ($rootMenuId) {
+                return self::isLevel2Menu($menu) && (int) $menu->rootparent_id === $rootMenuId;
+            })
+            ->sortBy('sort_order');
+
+        foreach ($level2Menus as $level2Menu) {
+            $path = $menus
+                ->filter(function ($menu) use ($level2Menu) {
+                    return self::isLevel3Menu($menu)
+                        && (int) $menu->parent_id === (int) $level2Menu->adw_web_portal_menus_id
+                        && filled($menu->path);
+                })
+                ->sortBy('sort_order')
+                ->pluck('path')
+                ->first();
+
+            if (filled($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     public static function isActive($path)
@@ -136,6 +139,195 @@ class MenuHelper
 
         ];
 
-        return $icons[$iconName] ?? '<svg width="0.5em" height="0.5em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>';
+        return $icons[$iconName] ?? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2"/></svg>';
+    }
+
+    private static function fetchAuthorizedMenus(?int $sortOrderMin = null, ?int $sortOrderMax = null)
+    {
+        $roleId = session('idempiere_role');
+
+        \Illuminate\Support\Facades\Log::info('MenuHelper Role ID: ' . ($roleId ?? 'NOT_FOUND'));
+
+        if (!$roleId) {
+            return collect();
+        }
+
+        $menusQuery = \Illuminate\Support\Facades\DB::connection('idempiere')
+            ->table('adw_web_portal_menus as m')
+            ->join('adw_web_portal_role_menus as rm', 'm.adw_web_portal_menus_id', '=', 'rm.adw_web_portal_menus_id')
+            ->where('rm.ad_role_id', $roleId)
+            ->where('m.isactive', 'Y')
+            ->where('rm.isactive', 'Y') 
+            ->select('m.*');
+
+        if (!is_null($sortOrderMin)) {
+            $menusQuery->where('m.sort_order', '>=', $sortOrderMin);
+        }
+
+        if (!is_null($sortOrderMax)) {
+            $menusQuery->where('m.sort_order', '<=', $sortOrderMax);
+        }
+
+        return $menusQuery
+            ->orderBy('m.rootparent_id')
+            ->orderBy('m.parent_id')
+            ->orderBy('m.sort_order')
+            ->get();
+    }
+
+    private static function getSidebarNavItems(?int $sortOrderMin = null, ?int $sortOrderMax = null): array
+    {
+        $menus = self::fetchAuthorizedMenus($sortOrderMin, $sortOrderMax);
+        $activeRootMenuId = self::resolveActiveRootMenuId($menus);
+
+        if (empty($activeRootMenuId)) {
+            return [];
+        }
+
+        $itemsById = [];
+        $sidebarItems = [];
+
+        foreach ($menus as $menu) {
+            if (self::isLevel2Menu($menu) || self::isLevel3Menu($menu)) {
+                $itemsById[$menu->adw_web_portal_menus_id] = self::makeMenuItem($menu);
+            }
+        }
+
+        foreach ($menus as $menu) {
+            $menuId = $menu->adw_web_portal_menus_id;
+
+            if (self::isLevel2Menu($menu) && (int) $menu->rootparent_id === (int) $activeRootMenuId && isset($itemsById[$menuId])) {
+                $sidebarItems[$menuId] = &$itemsById[$menuId];
+                continue;
+            }
+
+            if (self::isLevel3Menu($menu) && isset($itemsById[$menu->parent_id]) && isset($itemsById[$menuId])) {
+                $parentMenu = $itemsById[$menu->parent_id];
+
+                if ((int) ($parentMenu['root_parent_id'] ?? 0) === (int) $activeRootMenuId) {
+                    $itemsById[$menu->parent_id]['subItems'][] = &$itemsById[$menuId];
+                }
+            }
+        }
+
+        return array_values(array_filter(array_map([self::class, 'cleanupMenuItem'], $sidebarItems)));
+    }
+
+    private static function resolveActiveRootMenuId($menus): ?int
+    {
+        $menusById = $menus->keyBy('adw_web_portal_menus_id');
+        $currentPath = '/' . ltrim(request()->path(), '/');
+
+        $matchedMenu = $menus->first(function ($menu) use ($currentPath) {
+            if (blank($menu->path)) {
+                return false;
+            }
+
+            return '/' . ltrim($menu->path, '/') === $currentPath;
+        });
+
+        if ($matchedMenu) {
+            $resolvedRootMenuId = self::extractRootMenuId($matchedMenu, $menusById);
+
+            if ($resolvedRootMenuId) {
+                session(['selected_root_menu_id' => $resolvedRootMenuId]);
+
+                return $resolvedRootMenuId;
+            }
+        }
+
+        $selectedRootMenuId = session('selected_root_menu_id');
+
+        return filled($selectedRootMenuId) ? (int) $selectedRootMenuId : null;
+    }
+
+    private static function extractRootMenuId($menu, $menusById): ?int
+    {
+        if (self::isLevel1Menu($menu)) {
+            return (int) $menu->adw_web_portal_menus_id;
+        }
+
+        if (self::isLevel2Menu($menu)) {
+            return (int) $menu->rootparent_id;
+        }
+
+        if (self::isLevel3Menu($menu) && isset($menusById[$menu->parent_id])) {
+            $parentMenu = $menusById[$menu->parent_id];
+
+            return filled($parentMenu->rootparent_id) ? (int) $parentMenu->rootparent_id : null;
+        }
+
+        return null;
+    }
+
+    private static function makeMenuItem($menu): array
+    {
+        $item = [
+            'id' => $menu->adw_web_portal_menus_id,
+            'name' => $menu->name,
+            'description' => $menu->description ?? null,
+            'path' => $menu->path,
+            'icon' => $menu->icon,
+            'pro' => $menu->pro === 'Y',
+            'sort_order' => (int) ($menu->sort_order ?? 0),
+            'root_parent_id' => $menu->rootparent_id ?? null,
+            'parent_id' => $menu->parent_id ?? null,
+            'subItems' => [],
+        ];
+
+        if (empty($item['path'])) {
+            unset($item['path']);
+        }
+
+        if (empty($item['icon'])) {
+            unset($item['icon']);
+        }
+
+        return $item;
+    }
+
+    private static function isLevel1Menu($menu): bool
+    {
+        return empty($menu->parent_id) && empty($menu->rootparent_id);
+    }
+
+    private static function isLevel2Menu($menu): bool
+    {
+        return empty($menu->parent_id) && !empty($menu->rootparent_id);
+    }
+
+    private static function isLevel3Menu($menu): bool
+    {
+        return !empty($menu->parent_id) && empty($menu->rootparent_id);
+    }
+
+    private static function cleanupMenuItem(array $item): ?array
+    {
+        if (!empty($item['subItems'])) {
+            $item['subItems'] = array_values(array_filter(array_map([self::class, 'cleanupMenuItem'], $item['subItems'])));
+        }
+
+        if (empty($item['subItems'])) {
+            unset($item['subItems']);
+        }
+
+        unset($item['sort_order'], $item['root_parent_id'], $item['parent_id']);
+
+        return $item;
+    }
+
+    private static function matchesSortOrder($menu, ?int $sortOrderMin = null, ?int $sortOrderMax = null): bool
+    {
+        $sortOrder = (int) ($menu->sort_order ?? 0);
+
+        if (!is_null($sortOrderMin) && $sortOrder < $sortOrderMin) {
+            return false;
+        }
+
+        if (!is_null($sortOrderMax) && $sortOrder > $sortOrderMax) {
+            return false;
+        }
+
+        return true;
     }
 }

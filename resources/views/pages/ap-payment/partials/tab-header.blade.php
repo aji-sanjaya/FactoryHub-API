@@ -9,10 +9,12 @@
 
 <div class="px-8 py-6 max-w-7xl mx-auto">
     @php
+        $statusConfig = config('idempiere.ap-payment.statuses');
+        $defaultClientName = config('idempiere.ap-payment.defaults.client_name');
         $isNew = is_null($payment);
-        $isReadOnly = !$isNew && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $isReadOnly = !$isNew && in_array($payment->docstatus, $statusConfig['read_only']);
         $docNo = $isNew ? '** New **' : $payment->documentno;
-        $clientName = session('idempiere_client_name', 'Dharmamulia Prima Karya');
+        $clientName = session('idempiere_client_name', $defaultClientName);
     @endphp
 
     {{-- ── Section 1: General Information ─────────────────────────────────── --}}

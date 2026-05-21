@@ -1,3 +1,10 @@
+@php
+    $purchaseOrderConfig = $purchaseOrderConfig ?? config('idempiere.create-po');
+    $lineEditableStatuses = $purchaseOrderConfig['statuses']['line_editable'] ?? [];
+    $linePerPageOptions = $purchaseOrderConfig['limits']['line_per_page_options'] ?? [10, 25, 50];
+    $defaultLinePerPage = $purchaseOrderConfig['limits']['line_default_per_page'] ?? 10;
+@endphp
+
 <div id="lines-list-container" class="space-y-6">
     <input type="hidden" id="hidden_pricelist_id" value="{{ isset($order) ? $order->m_pricelist_id : '' }}">
     <!-- Table Controls (Search & Actions) -->
@@ -11,9 +18,12 @@
             <div class="relative">
                 <select name="per_page" onchange="handlePerPageLines(this.value)"
                     class="border border-gray-200 dark:border-gray-800 h-10 pl-3 pr-8 text-sm bg-gray-50 border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
-                    <option value="10" {{ request('per_page') == 10 ? 'selected' : '' }}>10 rows</option>
-                    <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25 rows</option>
-                    <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50 rows</option>
+                    @php
+                        $selectedPerPage = (int) request('per_page', $defaultLinePerPage);
+                    @endphp
+                    @foreach($linePerPageOptions as $linePerPageOption)
+                        <option value="{{ $linePerPageOption }}" {{ $selectedPerPage === (int) $linePerPageOption ? 'selected' : '' }}>{{ $linePerPageOption }} rows</option>
+                    @endforeach
                 </select>
             </div>
         </div>
@@ -37,7 +47,7 @@
 
             <!-- Create Action -->
             <!-- Check Order Status: Draft (DR), In Progress (IP), Invalid (IN) allow editing -->
-            @if(isset($order) && in_array($order->docstatus, ['DR', 'IN', 'IP']))
+            @if(isset($order) && in_array($order->docstatus, $lineEditableStatuses, true))
                 <div class="flex items-center gap-2">
                     <button type="button" id="deleteSelectedBtn" onclick="deleteSelectedLines()" style="display: none;"
                         class="inline-flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md transition-all focus:ring-4 focus:ring-red-500/30 gap-2">
@@ -148,7 +158,7 @@
                                     @if(!$isReadOnly)
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
-                                                onclick="editLine({{ $line->c_orderline_id }}, '{{ addslashes($line->product_code) }} - {{ addslashes($line->product_name) }}', {{ $line->m_product_id }}, {{ $line->qty }}, {{ $line->priceactual }}, '{{ addslashes($line->description ?? '') }}', {{ $line->line }}, '{{ addslashes($line->uom_name ?? '') }}', {{ $line->m_requisitionline_id ?? 'null' }}, '{{ addslashes($line->requisition_documentno ?? '') }}')"
+                                                onclick="editLine({{ $line->c_orderline_id }}, '{{ addslashes($line->product_code) }} - {{ addslashes($line->product_name) }}', {{ $line->m_product_id }}, {{ $line->qty }}, {{ $line->priceactual }}, '{{ addslashes($line->description ?? '') }}', {{ $line->line }}, '{{ addslashes($line->uom_name ?? '') }}', {{ $line->m_requisitionline_id ?? 'null' }}, '{{ addslashes($line->requisition_documentno ?? '') }}', {{ ($line->is_withholding === 'Y' || $line->is_withholding === true) ? 'true' : 'false' }}, {{ $line->withholding_rate ?? 2 }}, '{{ $line->withholding_amount ?? '0.00' }}')"
                                                 class="btn btn-sm btn-warning bg-yellow-100 me-1 p-2 rounded-sm" title="Edit">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -185,7 +195,7 @@
                                         </h3>
                                         <p class="text-gray-500 text-sm mb-6 dark:text-gray-400">Add products to this
                                             order to get started.</p>
-                                        @if(isset($order) && in_array($order->docstatus, ['DR', 'IN', 'IP']))
+                                        @if(isset($order) && in_array($order->docstatus, $lineEditableStatuses, true))
                                             <button onclick="showCreateLineForm()" type="button"
                                                 class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-brand-700 bg-brand-100 hover:bg-brand-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
                                                 Add First Line
@@ -320,7 +330,12 @@
                     <thead
                         class="sticky top-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
                         <tr>
-                            <th class="w-10 px-4 py-3"></th>
+                            <th class="w-10 px-4 py-3">
+                                <input type="checkbox" id="req_select_all"
+                                    class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                    title="Select / Deselect All"
+                                    onclick="toggleAllReqCheckboxes(this)">
+                            </th>
                             <th
                                 class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Req No</th>
@@ -495,6 +510,54 @@
                         <textarea id="line_description" name="description" rows="3"
                             class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-700 dark:border-gray-700 dark:text-white sm:text-sm p-3 placeholder-gray-400"
                             placeholder="Add any additional details or specifications..."></textarea>
+                    </div>
+
+                    <!-- Withholding Tax (PPh23) -->
+                    <div class="border border-orange-100 dark:border-orange-900/40 rounded-lg p-4 space-y-4 bg-orange-50/40 dark:bg-orange-900/10">
+                        <!-- IsWithholding -->
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="line_is_withholding" name="is_withholding" value="1"
+                                onchange="onLineWithholdingToggle(this.checked)"
+                                class="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-400 cursor-pointer">
+                            <label for="line_is_withholding" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                                Is Withholding Tax
+                                <span class="ml-1 text-xs font-normal text-orange-500">(PPh23)</span>
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- WithholdingRate -->
+                            <div>
+                                <label for="line_withholding_rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Withholding Rate (%)
+                                </label>
+                                <div class="relative">
+                                    <input type="number" id="line_withholding_rate" name="withholding_rate"
+                                        value="2" min="0" step="0.01" disabled
+                                        oninput="calculateLineTotal()"
+                                        class="block w-full rounded-lg border-gray-300 pr-8 focus:border-orange-400 focus:ring-orange-400 dark:bg-gray-800 dark:border-gray-700 dark:text-white sm:text-sm h-11 shadow-sm px-4 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed dark:disabled:bg-gray-800/60 transition-colors">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-400 text-sm">%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- WithholdingAmount -->
+                            <div>
+                                <label for="line_withholding_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    Withholding Amount
+                                    <span class="text-xs text-gray-400 font-normal ml-1">(Rate % × Line Amount)</span>
+                                </label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-500 sm:text-sm">Rp</span>
+                                    </div>
+                                    <input type="text" id="line_withholding_amount" name="withholding_amount"
+                                        readonly placeholder="0.00"
+                                        class="block w-full rounded-lg border-gray-200 bg-gray-50 pl-10 cursor-not-allowed dark:bg-gray-700/50 dark:border-gray-600 dark:text-orange-400 text-orange-600 sm:text-sm h-11 shadow-sm font-medium">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

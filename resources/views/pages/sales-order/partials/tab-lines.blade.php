@@ -1,6 +1,13 @@
 {{-- Expose price list precision to JS for use in product select change handler --}}
+@php
+    $salesOrderConfig = $salesOrderConfig ?? config('idempiere.sales-order');
+    $lineEditableStatuses = $salesOrderConfig['statuses']['line_editable'] ?? [];
+    $linePerPageOptions = $salesOrderConfig['limits']['line_per_page_options'] ?? [10, 25, 50, 100];
+    $defaultLinePerPage = $salesOrderConfig['limits']['line_default_per_page'] ?? 10;
+@endphp
+
 <script>
-    window.priceListPrecision = {{ $priceListPrecision ?? 2 }};
+    window.priceListPrecision = {{ $priceListPrecision ?? ($salesOrderConfig['defaults']['price_precision'] ?? 2) }};
     window.headerDatePromised = '{{ $salesOrder?->datepromised ?? '' }}';
 </script>
 
@@ -17,9 +24,12 @@
             <div class="relative">
                 <select name="per_page" onchange="handlePerPageLines(this.value)"
                     class="border border-gray-200 dark:border-gray-800 h-10 pl-3 pr-8 text-sm bg-gray-50 border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
-                    <option value="10" {{ request('per_page') == 10 ? 'selected' : '' }}>10 rows</option>
-                    <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25 rows</option>
-                    <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50 rows</option>
+                    @php
+                        $selectedPerPage = (int) request('per_page', $defaultLinePerPage);
+                    @endphp
+                    @foreach($linePerPageOptions as $linePerPageOption)
+                        <option value="{{ $linePerPageOption }}" {{ $selectedPerPage === (int) $linePerPageOption ? 'selected' : '' }}>{{ $linePerPageOption }} rows</option>
+                    @endforeach
                 </select>
             </div>
         </div>
@@ -42,7 +52,7 @@
             </div>
 
             <!-- Create Action -->
-            @if(isset($salesOrder) && in_array($salesOrder->docstatus, ['DR', 'IN', 'IP']))
+            @if(isset($salesOrder) && in_array($salesOrder->docstatus, $lineEditableStatuses, true))
                 <div class="flex items-center gap-2">
                     <button type="button" id="deleteSelectedBtn" onclick="deleteSelectedLines()" style="display: none;"
                         class="inline-flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md transition-all focus:ring-4 focus:ring-red-500/30 gap-2">
@@ -199,7 +209,7 @@
                                         </h3>
                                         <p class="text-gray-500 text-sm mb-6 dark:text-gray-400">Add products to this
                                             sales-order to get started.</p>
-                                        @if(isset($salesOrder) && in_array($salesOrder->docstatus, ['DR', 'IN', 'IP']))
+                                        @if(isset($salesOrder) && in_array($salesOrder->docstatus, $lineEditableStatuses, true))
                                             <button onclick="showCreateLineForm()" type="button"
                                                 class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-brand-700 bg-brand-100 hover:bg-brand-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
                                                 Add First Line

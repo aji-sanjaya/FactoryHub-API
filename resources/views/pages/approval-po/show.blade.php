@@ -35,6 +35,14 @@
 @endpush
 
 @section('content')
+    @php
+        $approvalConfig = config('idempiere.approval-po');
+        $statusConfig = $approvalConfig['statuses'];
+        $workflowConfig = $approvalConfig['workflow'];
+        $statusLabel = $statusConfig['labels'][$order->docstatus] ?? ($order->status_label ?? $order->docstatus);
+        $statusClass = $statusConfig['badge_classes'][$statusLabel] ?? 'bg-gray-100 text-gray-800';
+        $canTakeAction = in_array($order->docstatus, $statusConfig['actionable']) && $isMyApproval;
+    @endphp
     <div class="main-content group-data-[sidebar-size=lg]:xl:ml-[322px]">
         <!-- Header -->
         <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -52,10 +60,8 @@
                     </h2>
                 </div>
                 <div class="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 ml-7">
-                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                                    {{ $order->docstatus == 'IP' ? 'bg-yellow-100 text-yellow-800' :
-        ($order->docstatus == 'CO' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800') }}">
-                        {{ $order->status_label }}
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusClass }}">
+                        {{ $statusLabel }}
                     </span>
                     <span>{{ date('d M Y', strtotime($order->dateordered)) }}</span>
                     <span>{{ $order->description }}</span>
@@ -63,21 +69,21 @@
             </div>
 
             <div class="flex items-center gap-3 ml-7 sm:ml-0">
-                @if($order->docstatus == 'IP' && $isMyApproval)
+                @if($canTakeAction)
                     <button onclick="handleApproval('REJECT')"
                         class="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors flex items-center gap-2 shadow-sm font-medium text-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
                             </path>
                         </svg>
-                        Reject
+                        {{ $workflowConfig['action_labels']['REJECT'] }}
                     </button>
                     <button onclick="handleApproval('APPROVE')"
                         class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors flex items-center gap-2 shadow-sm font-medium text-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                         </svg>
-                        Approve
+                        {{ $workflowConfig['action_labels']['APPROVE'] }}
                     </button>
                 @endif
             </div>
@@ -250,15 +256,19 @@
         }
 
         function handleApproval(action) {
+            const confirmationTitles = @json($workflowConfig['confirmation_titles']);
+            const confirmButtonTexts = @json($workflowConfig['confirm_button_text']);
+            const actionLabels = @json($workflowConfig['action_labels']);
+
             Swal.fire({
-                title: action === 'APPROVE' ? 'Approve Request?' : 'Reject Request?',
+                title: confirmationTitles[action] || `${actionLabels[action] || action} Request?`,
                 text: 'Please provide a comment (optional):',
                 input: 'textarea',
                 inputPlaceholder: 'Enter your comment here...',
                 icon: action === 'APPROVE' ? 'question' : 'warning',
                 showCancelButton: true,
                 confirmButtonColor: action === 'APPROVE' ? '#16a34a' : '#dc2626',
-                confirmButtonText: action === 'APPROVE' ? 'Yes, Approve' : 'Yes, Reject',
+                confirmButtonText: confirmButtonTexts[action] || `Yes, ${actionLabels[action] || action}`,
                 showLoaderOnConfirm: true,
                 preConfirm: (comment) => {
                     return axios.post('{{ route("approval-po.process", $encryptedId) }}', {

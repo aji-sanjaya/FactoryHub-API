@@ -14,6 +14,16 @@
             // Auto-open Dashboard menu on page load
             this.initializeActiveMenus();
         },
+        matchesPath(currentPath, targetPath) {
+            if (!targetPath) {
+                return false;
+            }
+
+            const normalizedCurrentPath = '/' + String(currentPath || '').replace(/^\/+/, '');
+            const normalizedTargetPath = '/' + String(targetPath || '').replace(/^\/+/, '');
+
+            return normalizedCurrentPath === normalizedTargetPath || normalizedCurrentPath.startsWith(normalizedTargetPath + '/');
+        },
         initializeActiveMenus() {
             const currentPath = '{{ $currentPath }}';
 
@@ -22,8 +32,8 @@
                     @if (isset($item['subItems']))
                         // Check if any submenu item matches current path
                         @foreach ($item['subItems'] as $subItem)
-                            if (currentPath === '{{ ltrim($subItem['path'] ?? '', '/') }}' ||
-                                window.location.pathname === '{{ $subItem['path'] ?? '' }}') {
+                            if (this.matchesPath(currentPath, '{{ $subItem['path'] ?? '' }}') ||
+                                this.matchesPath(window.location.pathname, '{{ $subItem['path'] ?? '' }}')) {
                                 this.openSubmenus['{{ $groupIndex }}-{{ $itemIndex }}'] = true;
                         } @endforeach
                     @endif
@@ -46,7 +56,7 @@
             return this.openSubmenus[key] || false;
         },
         isActive(path) {
-            return window.location.pathname === path || '{{ $currentPath }}' === path.replace(/^\//, '');
+            return this.matchesPath(window.location.pathname, path) || this.matchesPath('{{ $currentPath }}', path);
         }
     }" :class="{
         'w-[290px]': $store.sidebar.isExpanded || $store.sidebar.isMobileOpen || $store.sidebar.isHovered,
@@ -56,17 +66,31 @@
     }" @mouseenter="if (!$store.sidebar.isExpanded) $store.sidebar.setHovered(true)"
     @mouseleave="$store.sidebar.setHovered(false)">
     <!-- Logo Section -->
-    <div class="pt-8 pb-7 flex" :class="(!$store.sidebar.isExpanded && !$store.sidebar.isHovered && !$store.sidebar.isMobileOpen) ?
+    <div class="pt-5 pb-7 flex" :class="(!$store.sidebar.isExpanded && !$store.sidebar.isHovered && !$store.sidebar.isMobileOpen) ?
         'xl:justify-center' :
         'justify-start'">
-        <a href="/">
-            <img x-show="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen"
-                class="dark:hidden" src="/images/logo/logo.svg" alt="Logo" width="150" height="40" />
-            <img x-show="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen"
-                class="hidden dark:block" src="/images/logo/logo-dark.svg" alt="Logo" width="150" height="40" />
-            <img x-show="!$store.sidebar.isExpanded && !$store.sidebar.isHovered && !$store.sidebar.isMobileOpen"
-                src="/images/logo/logo-icon.svg" alt="Logo" width="32" height="32" />
-
+        <a href="/" class="flex items-center gap-2.5">
+            {{-- Expanded: icon + text --}}
+            <template x-if="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen">
+                <div class="flex items-center gap-2.5">
+                    <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-500 shadow">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <path d="M13 2L4.09 12.11a1 1 0 0 0 .77 1.64H11l-1 8 8.91-10.11a1 1 0 0 0-.77-1.64H13l1-8Z"
+                                fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <span class="text-base font-bold tracking-wide text-gray-900 dark:text-white">FactoryHub</span>
+                </div>
+            </template>
+            {{-- Collapsed: icon only --}}
+            <template x-if="!$store.sidebar.isExpanded && !$store.sidebar.isHovered && !$store.sidebar.isMobileOpen">
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 shadow">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L4.09 12.11a1 1 0 0 0 .77 1.64H11l-1 8 8.91-10.11a1 1 0 0 0-.77-1.64H13l1-8Z"
+                            fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </template>
         </a>
     </div>
 
@@ -144,14 +168,19 @@
 
                                         <!-- Submenu -->
                                         <div
-                                            x-show="isSubmenuOpen({{ $groupIndex }}, {{ $itemIndex }}) && ($store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen)">
-                                            <ul class="mt-2 space-y-1 ml-9">
+                                            x-show="isSubmenuOpen({{ $groupIndex }}, {{ $itemIndex }}) && ($store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen)"
+                                            x-collapse>
+                                            <ul class="mt-2 space-y-1 ml-4">
                                                 @foreach ($item['subItems'] as $subItem)
                                                     <li>
                                                         <a href="{{ $subItem['path'] ?? '#' }}" class="menu-dropdown-item"
                                                             :class="isActive('{{ $subItem['path'] ?? '' }}') ?
                                                                                                                                                                 'menu-dropdown-item-active' :
                                                                                                                                                                 'menu-dropdown-item-inactive'">
+                                                            <span class="flex-shrink-0"
+                                                                :class="isActive('{{ $subItem['path'] ?? '' }}') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'">
+                                                                {!! MenuHelper::getIconSvg($subItem['icon'] ?? 'circle-dot') !!}
+                                                            </span>
                                                             {{ $subItem['name'] }}
                                                             <span class="flex items-center gap-1 ml-auto">
                                                                 @if (!empty($subItem['new']))
@@ -214,6 +243,26 @@
                 @endforeach
             </div>
         </nav>
+
+        <div class="mb-6">
+            <a href="{{ route('dashboard') }}"
+                class="group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-sm font-medium transition-colors"
+                :class="[
+                    (!$store.sidebar.isExpanded && !$store.sidebar.isHovered && !$store.sidebar.isMobileOpen) ? 'xl:justify-center' : 'justify-start',
+                    'border-brand-200 bg-brand-50 text-brand-600 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300'
+                ]">
+                <span class="text-brand-600 dark:text-brand-300">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path d="M10.707 1.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 10h1v6a1 1 0 001 1h3.5a.5.5 0 00.5-.5V13a1 1 0 011-1h0a1 1 0 011 1v3.5a.5.5 0 00.5.5H15a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
+                    </svg>
+                </span>
+                <span
+                    x-show="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen"
+                    class="truncate">
+                    Back Home
+                </span>
+            </a>
+        </div>
 
         <!-- Sidebar Widget -->
         <div x-data x-show="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen"

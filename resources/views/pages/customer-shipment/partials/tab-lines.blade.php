@@ -1,4 +1,7 @@
 <!-- Lines List Container -->
+@php
+    $customerShipmentConfig = config('idempiere.customer-shipment');
+@endphp
 <div id="lines-list-container" class="space-y-6">
     <!-- Table Controls (Search & Actions) -->
     <div
@@ -36,7 +39,7 @@
             </div>
 
             <!-- Create Action -->
-            @if(isset($shipment) && in_array($shipment->docstatus, ['DR', 'IN', 'IP']))
+            @if(isset($shipment) && in_array($shipment->docstatus, $customerShipmentConfig['statuses']['editable_lines']))
                 <div class="flex items-center gap-2">
                     <button type="button" id="deleteSelectedBtn" onclick="deleteSelectedLines()" style="display: none;"
                         class="inline-flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md transition-all focus:ring-4 focus:ring-red-500/30 gap-2">
@@ -54,7 +57,15 @@
                                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                         <span>From SO</span>
-                    </button> 
+                    </button>
+                    <button type="button" onclick="showCreateLineForm()"
+                        class="inline-flex items-center justify-center px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md transition-all focus:ring-4 focus:ring-brand-500/30 gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>Add Line</span>
+                    </button>
                 </div>
             @endif
         </div>
@@ -166,7 +177,7 @@
                                         </h3>
                                         <p class="text-gray-500 text-sm mb-6 dark:text-gray-400">Add products to this
                                             shipment to get started.</p>
-                                        @if(isset($shipment) && in_array($shipment->docstatus, ['DR', 'IN', 'IP']))
+                                        @if(isset($shipment) && in_array($shipment->docstatus, $customerShipmentConfig['statuses']['editable_lines']))
                                             <button onclick="showCreateLineForm()" type="button"
                                                 class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-brand-700 bg-brand-100 hover:bg-brand-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
                                                 Add First Line
@@ -314,16 +325,16 @@
 
 <!-- From SO Modal -->
 <div id="fromSOModal" class="fixed inset-0 z-999999 hidden overflow-y-auto">
-    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0 backdrop-blur-sm">
+    <div class="flex items-center justify-center min-h-screen px-4 py-6">
         <div class="fixed inset-0 bg-gray-900/60" onclick="closeFromSOModal()"></div>
-        <div class="relative inline-block align-bottom bg-white rounded-2xl text-left shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full dark:bg-gray-900">
+        <div class="relative w-full bg-white rounded-2xl text-left shadow-xl sm:max-w-5xl dark:bg-gray-900">
             <!-- Header -->
-            <div class="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div class="px-4 sm:px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                 <div>
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Select from Sales Order</h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Choose SO lines to ship</p>
+                    <h3 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Select from Sales Order</h3>
+                    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Choose SO lines to ship</p>
                 </div>
-                <button onclick="closeFromSOModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <button onclick="closeFromSOModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 ml-3">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -331,19 +342,19 @@
             </div>
 
             <!-- Filter -->
-            <div class="px-6 py-3 border-b border-gray-100 dark:border-gray-700">
-                <div class="grid grid-cols-12 gap-3 items-end">
-                    <div class="col-span-12 md:col-span-5">
+            <div class="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-gray-700">
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    <div class="sm:col-span-5">
                         <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Sales Order</label>
                         <select id="soDocumentFilter" class="w-full text-sm rounded-lg border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300">
                             <option value="">-- Select Sales Order --</option>
                         </select>
                     </div>
-                    <div class="col-span-12 md:col-span-5">
+                    <div class="sm:col-span-5">
                         <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Date Promised</label>
                         <x-form.date-picker id="soDatePromisedFilter" name="so_date_promised" placeholder="Select Date" dateFormat="Y-m-d"/>
                     </div>
-                    <div class="col-span-12 md:col-span-2">
+                    <div class="sm:col-span-2">
                         <button onclick="loadSOLines()"
                             class="w-full px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors h-11">
                             Refresh
@@ -353,7 +364,7 @@
             </div>
 
             <!-- Results -->
-            <div class="overflow-y-auto" style="max-height: 55vh;">
+            <div class="overflow-y-auto overflow-x-auto" style="max-height: 55vh;">
                 <div id="soLinesLoading" class="hidden">
                     <table class="min-w-full"><tbody>
                         <tr><td colspan="8" class="px-4 py-8 text-center text-xs text-gray-400">Loading...</td></tr>
@@ -373,13 +384,13 @@
                                 <input type="checkbox" id="soSelectAll" onclick="toggleSOSelectAll(this)"
                                     class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
                             </th>
-                            <th class="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Date</th>
-                            <th class="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Product</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Ordered</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Delivered</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Remaining</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">Ship Qty</th>
-                            <th class="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400">UOM</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap">Date</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap">Product</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap">Ordered</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap">Delivered</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap">Remaining</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap">Ship Qty</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider dark:text-gray-400 whitespace-nowrap">UOM</th>
                         </tr>
                     </thead>
                     <tbody id="soLinesBody" class="bg-white divide-y divide-gray-100 dark:bg-gray-900 dark:divide-gray-700">
@@ -394,18 +405,18 @@
             </div>
 
             <!-- Footer -->
-            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <div class="text-xs text-gray-500 dark:text-gray-400">
+            <div class="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
                     <span id="soSelectedCount">0</span> line(s) selected
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 justify-end">
                     <button onclick="closeFromSOModal()"
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+                        class="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors text-center">
                         Close
                     </button>
                     <button type="button" onclick="processFromSO()" id="btnProcessFromSO"
-                        class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        class="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
                         Add Selected Lines

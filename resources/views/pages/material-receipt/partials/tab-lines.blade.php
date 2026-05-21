@@ -1,7 +1,8 @@
 @php
+    $materialReceiptConfig = $materialReceiptConfig ?? config('idempiere.create-gr');
     $isNew = is_null($receipt);
-    $isReadOnly = !$isNew && in_array($receipt->docstatus, ['CO', 'CL', 'VO', 'RE']);
-    $isDraft = !$isNew && $receipt->docstatus === 'DR';
+    $isReadOnly = !$isNew && in_array($receipt->docstatus, $materialReceiptConfig['statuses']['read_only'] ?? [], true);
+    $isDraft = !$isNew && in_array($receipt->docstatus, $materialReceiptConfig['statuses']['draft'] ?? ['DR'], true);
     $cs = $receipt->docstatus ?? 'DR';
 @endphp
 

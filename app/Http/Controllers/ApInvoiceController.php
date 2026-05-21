@@ -24,6 +24,8 @@ class ApInvoiceController extends Controller
 
     public function index()
     {
+        $apInvoiceConfig = config('idempiere.ap-invoice');
+
         if (!Session::has('api_token')) {
             return redirect()->route('signin');
         }
@@ -32,19 +34,19 @@ class ApInvoiceController extends Controller
             return $this->showForm(request('document_id'));
         }
 
-        $perPage = request()->get('per_page', 10);
+        $perPage = (int) request()->get('per_page', $apInvoiceConfig['limits']['list_per_page']);
         $status = request()->get('status', 'all');
         $search = request()->get('search', '');
 
         $clientId = Session::get('idempiere_client');
 
         $query = CInvoice::where('c_invoice.ad_client_id', $clientId)
-            ->where('c_invoice.issotrx', 'N')
+            ->where('c_invoice.issotrx', $apInvoiceConfig['defaults']['is_so_trx'])
             ->where('c_invoice.isactive', 'Y');
 
         // Filter to AP Invoice doc base type (API) via join
         $query->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_invoice.c_doctype_id')
-            ->where('dt.docbasetype', 'API')
+            ->where('dt.docbasetype', $apInvoiceConfig['doc_types']['base_type'])
             ->select('c_invoice.*');
 
         if ($status !== 'all') {
@@ -58,15 +60,15 @@ class ApInvoiceController extends Controller
         $invoices = $query->paginate($perPage);
 
         $baseQuery = CInvoice::where('c_invoice.ad_client_id', $clientId)
-            ->where('c_invoice.issotrx', 'N')
+            ->where('c_invoice.issotrx', $apInvoiceConfig['defaults']['is_so_trx'])
             ->where('c_invoice.isactive', 'Y')
             ->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_invoice.c_doctype_id')
-            ->where('dt.docbasetype', 'API');
+            ->where('dt.docbasetype', $apInvoiceConfig['doc_types']['base_type']);
 
         $countAll = (clone $baseQuery)->count();
-        $countDraft = (clone $baseQuery)->where('c_invoice.docstatus', 'DR')->count();
-        $countInProgress = (clone $baseQuery)->where('c_invoice.docstatus', 'IP')->count();
-        $countCompleted = (clone $baseQuery)->whereIn('c_invoice.docstatus', ['CO', 'CL'])->count();
+        $countDraft = (clone $baseQuery)->whereIn('c_invoice.docstatus', $apInvoiceConfig['statuses']['draft'])->count();
+        $countInProgress = (clone $baseQuery)->whereIn('c_invoice.docstatus', $apInvoiceConfig['statuses']['in_progress'])->count();
+        $countCompleted = (clone $baseQuery)->whereIn('c_invoice.docstatus', $apInvoiceConfig['statuses']['completed'])->count();
 
         if (request()->ajax()) {
             return response()->json([
@@ -88,6 +90,8 @@ class ApInvoiceController extends Controller
 
     private function showForm($docId)
     {
+        $apInvoiceConfig = config('idempiere.ap-invoice');
+
         $invoice = null;
         if ($docId !== 'new') {
             try {
@@ -124,7 +128,7 @@ class ApInvoiceController extends Controller
             SELECT c_bpartner_id AS id, name AS text
             FROM c_bpartner
             WHERE isactive = 'Y' AND ad_client_id = ? AND isvendor='Y'
-            ORDER BY name LIMIT 200
+            ORDER BY name LIMIT {$apInvoiceConfig['limits']['vendor_search']}
         ", [$clientId]);
 
         // Doc Types for AP Invoice
@@ -132,10 +136,10 @@ class ApInvoiceController extends Controller
             SELECT dt.c_doctype_id AS id, dt.name AS text
             FROM c_doctype dt
             WHERE dt.isactive = 'Y'
-            AND dt.docbasetype = 'API'
+            AND dt.docbasetype = ?
             AND dt.ad_client_id = ?
             ORDER BY dt.c_doctype_id ASC
-        ", [$clientId]);
+        ", [$apInvoiceConfig['doc_types']['base_type'], $clientId]);
 
         // Payment Terms
         $paymentTerms = DB::connection('idempiere')->select("
@@ -171,6 +175,14 @@ class ApInvoiceController extends Controller
 
         // Invoice Lines
         if ($invoice) {
+            $defaultLinePerPage = $apInvoiceConfig['limits']['line_default_per_page'];
+            $linePerPageOptions = $apInvoiceConfig['limits']['line_per_page_options'];
+            $linePerPage = request()->integer('per_page', $defaultLinePerPage);
+
+            if (!in_array($linePerPage, $linePerPageOptions, true)) {
+                $linePerPage = $defaultLinePerPage;
+            }
+
             $lines = DB::connection('idempiere')
                 ->table('c_invoiceline as il')
                 ->leftJoin('m_product as p', 'il.m_product_id', '=', 'p.m_product_id')
@@ -201,15 +213,18 @@ class ApInvoiceController extends Controller
                     'io.documentno as gr_documentno',
                     'io.documentno as receipt_no',
                     'io.poreference as receipt_poref',
-                    'io.movementdate as receipt_date'
+                    'io.movementdate as receipt_date',
+                    'il.iswithholding as is_withholding',
+                    'il.withholdingrate as withholding_rate',
+                    'il.withholdingamount as withholding_amount'
                 )
                 ->orderBy('il.line')
-                ->paginate(10);
+                ->paginate($linePerPage);
         } else {
-            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
+            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $apInvoiceConfig['limits']['line_default_per_page']);
         }
 
-        $statusLabel = $invoice ? $this->getStatusLabel($invoice->docstatus) : 'Draft';
+        $statusLabel = $invoice ? $this->getStatusLabel($invoice->docstatus) : $apInvoiceConfig['defaults']['document_status_label'];
 
         // Check Active Workflow
         $hasActiveWorkflow = false;
@@ -217,7 +232,7 @@ class ApInvoiceController extends Controller
             $hasActiveWorkflow = DB::connection('idempiere')
                 ->table('ad_wf_activity')
                 ->join('ad_table', 'ad_table.ad_table_id', '=', 'ad_wf_activity.ad_table_id')
-                ->where('ad_table.tablename', 'C_Invoice')
+                ->where('ad_table.tablename', $apInvoiceConfig['workflow']['table_name'])
                 ->where('ad_wf_activity.record_id', $invoice->c_invoice_id)
                 ->where('ad_wf_activity.processed', 'N')
                 ->exists();
@@ -229,7 +244,7 @@ class ApInvoiceController extends Controller
         $defaultCurrencyId = null;
         $idrCurrency = DB::connection('idempiere')
             ->table('c_currency')
-            ->where('iso_code', 'IDR')
+            ->where('iso_code', $apInvoiceConfig['defaults']['currency_iso_code'])
             ->where('isactive', 'Y')
             ->first();
         if ($idrCurrency) {
@@ -278,7 +293,7 @@ class ApInvoiceController extends Controller
                 ? \Carbon\Carbon::parse($invoice->dateacct)->format('Y-m-d')
                 : date('Y-m-d'),
             'docIdParam' => request('document_id'),
-            'isReadOnly' => $invoice && in_array($invoice->docstatus, ['CO', 'CL', 'VO', 'RE']),
+            'isReadOnly' => $invoice && in_array($invoice->docstatus, $apInvoiceConfig['statuses']['read_only'], true),
             'isDraft' => $invoice && $invoice->docstatus === 'DR',
             'activeTab' => request('tab', 'header'),
             'hasActiveWorkflow' => $hasActiveWorkflow,
@@ -288,6 +303,8 @@ class ApInvoiceController extends Controller
             'taxId' => $invoice ? $invoice->c_tax_id : null,
             'grandTotal' => $invoice ? $invoice->grandtotal : 0,
             'totalLines' => $invoice ? $invoice->totallines : 0,
+            'withholdingTotal' => $invoice ? ($invoice->withholdingamount ?? 0) : 0,
+            'apInvoiceConfig' => $apInvoiceConfig,
         ];
 
         if (request()->ajax() && request()->has('ajax_tab')) {
@@ -335,10 +352,10 @@ class ApInvoiceController extends Controller
                             DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                             DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                         )
-                        ->where('fa.ad_table_id', 318) // 318 is C_Invoice
+                        ->where('fa.ad_table_id', $apInvoiceConfig['journals']['table_id'])
                         ->where('fa.record_id', $invoice->c_invoice_id)
                         ->orderBy('fa.fact_acct_id')
-                        ->paginate(10)
+                        ->paginate($apInvoiceConfig['limits']['journals_per_page'])
                         ->appends(['ajax_tab' => 'journals']);
                 }
                 $viewData['journals'] = $journals;
@@ -356,6 +373,8 @@ class ApInvoiceController extends Controller
 
     public function store(Request $request)
     {
+        $apInvoiceConfig = config('idempiere.ap-invoice');
+
         $validated = $request->validate([
             'org_id' => 'required',
             'c_bpartner_id' => 'required',
@@ -402,7 +421,7 @@ class ApInvoiceController extends Controller
             ->table('m_pricelist')
             ->where('ad_client_id', $sessionClientId)
             ->where('isactive', 'Y')
-            ->where('issopricelist', 'N')
+            ->where('issopricelist', $apInvoiceConfig['defaults']['price_list_is_so_price_list'])
             ->orderBy('m_pricelist_id', 'asc')
             ->first();
 
@@ -426,7 +445,7 @@ class ApInvoiceController extends Controller
             'DateInvoiced' => $validated['invoice_date'],
             'DueDate' => $validated['due_date'],
             'DateAcct' => $validated['date_acct'] ?? $validated['invoice_date'],
-            'IsSOTrx' => 'N',
+            'IsSOTrx' => $apInvoiceConfig['defaults']['is_so_trx'],
             'C_BPartner_ID' => $bpartnerId,
             'C_Currency_ID' => (int) $validated['c_currency_id'],
             'C_PaymentTerm_ID' => (int) $validated['c_paymentterm_id'],
@@ -552,6 +571,8 @@ class ApInvoiceController extends Controller
             'c_orderline_id' => 'nullable|numeric',
             'm_inoutline_id' => 'nullable|numeric',
             'c_tax_id' => 'nullable|integer',
+            'is_withholding'   => 'nullable',
+            'withholding_rate' => 'nullable|numeric|min:0',
         ]);
 
         try {
@@ -583,6 +604,11 @@ class ApInvoiceController extends Controller
             $taxAmt = round($netAmt * ($taxRate / 100), 2);
             $lineTotalAmt = round($netAmt + $taxAmt, 2);
 
+            // Withholding Tax (PPh23)
+            $isWithholding   = $request->boolean('is_withholding');
+            $withholdingRate = (float) ($validated['withholding_rate'] ?? 0);
+            $withholdingAmt  = $isWithholding ? round($netAmt * $withholdingRate / 100, 2) : 0;
+
             // Get UOM from product if not provided
             $uomId = DB::connection('idempiere')
                 ->table('m_product')
@@ -600,6 +626,9 @@ class ApInvoiceController extends Controller
                     'TaxAmt' => $taxAmt,
                     'LineTotalAmt' => $lineTotalAmt,
                     'Description' => $validated['description'] ?? null,
+                    'IsWithholding'     => $isWithholding ? 'Y' : 'N',
+                    'WithholdingRate'   => $withholdingRate,
+                    'WithholdingAmount' => $withholdingAmt,
                 ];
                 if ($uomId)
                     $updatePayload['C_UOM_ID'] = (int) $uomId;
@@ -623,6 +652,9 @@ class ApInvoiceController extends Controller
                     'TaxAmt' => $taxAmt,
                     'LineTotalAmt' => $lineTotalAmt,
                     'Description' => $validated['description'] ?? null,
+                    'IsWithholding'     => $isWithholding ? 'Y' : 'N',
+                    'WithholdingRate'   => $withholdingRate,
+                    'WithholdingAmount' => $withholdingAmt,
                 ];
                 if ($invoice)
                     $createPayload['AD_Org_ID'] = (int) $invoice->ad_org_id;
@@ -640,7 +672,32 @@ class ApInvoiceController extends Controller
             }
 
             if ($response->successful()) {
-                return response()->json(['message' => "Line {$action} successfully"]);
+                // Sync withholding total on invoice header
+                $totalWithholding = DB::connection('idempiere')
+                    ->table('c_invoiceline')
+                    ->where('c_invoice_id', $invoiceId)
+                    ->sum('withholdingamount');
+
+                DB::connection('idempiere')
+                    ->table('c_invoice')
+                    ->where('c_invoice_id', $invoiceId)
+                    ->update(['withholdingamount' => $totalWithholding ?? 0]);
+
+                // Fetch updated invoice totals to return
+                $updatedInvoice = DB::connection('idempiere')
+                    ->table('c_invoice')
+                    ->where('c_invoice_id', $invoiceId)
+                    ->select('grandtotal', 'totallines', 'withholdingamount')
+                    ->first();
+
+                return response()->json([
+                    'message'          => "Line {$action} successfully",
+                    'total_lines'      => number_format($updatedInvoice->totallines ?? 0, 2),
+                    'grandtotal'       => number_format($updatedInvoice->grandtotal ?? 0, 2),
+                    'tax_amount'       => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->totallines ?? 0), 2),
+                    'withholding_total'=> number_format($updatedInvoice->withholdingamount ?? 0, 2),
+                    'grand_total_net'  => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->withholdingamount ?? 0), 2),
+                ]);
             } else {
                 Log::error("AP Invoice Line Error ({$action}): " . $response->body());
                 return response()->json(['message' => "Failed to {$action} line: " . $response->body()], $response->status());
@@ -654,9 +711,14 @@ class ApInvoiceController extends Controller
 
     public function destroyLine(Request $request)
     {
-        $validated = $request->validate(['line_ids' => 'required|array']);
+        $validated = $request->validate([
+            'line_ids'    => 'required|array',
+            'document_id' => 'required',
+        ]);
 
         try {
+            $invoiceId = Crypt::decryptString($validated['document_id']);
+
             foreach ($validated['line_ids'] as $lineId) {
                 $lineId = (int) $lineId;
                 $response = $this->idempiereService->delete("models/c_invoiceline/{$lineId}");
@@ -670,7 +732,31 @@ class ApInvoiceController extends Controller
                 }
             }
 
-            return response()->json(['message' => 'Line(s) deleted successfully']);
+            // Sync withholding total on invoice header
+            $totalWithholding = DB::connection('idempiere')
+                ->table('c_invoiceline')
+                ->where('c_invoice_id', $invoiceId)
+                ->sum('withholdingamount');
+
+            DB::connection('idempiere')
+                ->table('c_invoice')
+                ->where('c_invoice_id', $invoiceId)
+                ->update(['withholdingamount' => $totalWithholding ?? 0]);
+
+            $updatedInvoice = DB::connection('idempiere')
+                ->table('c_invoice')
+                ->where('c_invoice_id', $invoiceId)
+                ->select('grandtotal', 'totallines', 'withholdingamount')
+                ->first();
+
+            return response()->json([
+                'message'          => 'Line(s) deleted successfully',
+                'total_lines'      => number_format($updatedInvoice->totallines ?? 0, 2),
+                'grandtotal'       => number_format($updatedInvoice->grandtotal ?? 0, 2),
+                'tax_amount'       => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->totallines ?? 0), 2),
+                'withholding_total'=> number_format($updatedInvoice->withholdingamount ?? 0, 2),
+                'grand_total_net'  => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->withholdingamount ?? 0), 2),
+            ]);
 
         } catch (\Exception $e) {
             Log::error('AP Invoice Line Delete Error: ' . $e->getMessage());
@@ -680,9 +766,11 @@ class ApInvoiceController extends Controller
 
     public function process(Request $request)
     {
+        $apInvoiceConfig = config('idempiere.ap-invoice');
+
         $validated = $request->validate([
             'document_id' => 'required',
-            'doc_action' => 'required|in:CO,PR,VO,CL,RC',
+            'doc_action' => 'required|in:' . implode(',', $apInvoiceConfig['workflow']['allowed_actions']),
         ]);
 
         try {
@@ -853,6 +941,7 @@ class ApInvoiceController extends Controller
     public function exportJournals($id)
     {
         try {
+            $apInvoiceConfig = config('idempiere.ap-invoice');
             $decryptedId = Crypt::decryptString($id);
             $invoice = CInvoice::findOrFail($decryptedId);
 
@@ -865,7 +954,7 @@ class ApInvoiceController extends Controller
                     DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                     DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                 )
-                ->where('fa.ad_table_id', 318) // 318 is C_Invoice
+                ->where('fa.ad_table_id', $apInvoiceConfig['journals']['table_id'])
                 ->where('fa.record_id', $invoice->c_invoice_id)
                 ->orderBy('fa.fact_acct_id')
                 ->get();
@@ -925,13 +1014,14 @@ class ApInvoiceController extends Controller
     // API: Get Receipt Lines for "From Receipt" modal
     public function getReceiptLines(Request $request)
     {
+        $apInvoiceConfig = config('idempiere.ap-invoice');
         $clientId = Session::get('idempiere_client');
         $search = $request->get('q', '');
         $page = $request->get('page', 1);
-        $perPage = 15;
+        $perPage = $apInvoiceConfig['limits']['receipt_modal'];
         $vendorId = $request->get('vendor_id'); // optional: filter by vendor from the invoice
 
-        if (strlen($search) < 2) {
+        if (strlen($search) < $apInvoiceConfig['limits']['link_min_search_length']) {
             return response()->json([
                 'results' => [],
                 'pagination' => ['more' => false],
@@ -947,9 +1037,9 @@ class ApInvoiceController extends Controller
             ->leftJoin('c_uom as u', 'u.c_uom_id', '=', 'il.c_uom_id')
             ->leftJoin('c_orderline as ol', 'ol.c_orderline_id', '=', 'il.c_orderline_id')
             ->where('io.ad_client_id', $clientId)
-            ->where('io.docstatus', 'CO')         // Completed receipts only
-            ->where('io.movementtype', 'V+')       // Vendor receipts
-            ->where('io.issotrx', 'N')
+            ->where('io.docstatus', $apInvoiceConfig['receipt_filters']['doc_status'])
+            ->where('io.movementtype', $apInvoiceConfig['receipt_filters']['movement_type'])
+            ->where('io.issotrx', $apInvoiceConfig['receipt_filters']['is_so_trx'])
             // Exclude lines already fully invoiced
             ->whereRaw("il.movementqty - COALESCE((SELECT SUM(inl.qtyinvoiced) FROM c_invoiceline inl JOIN c_invoice i ON i.c_invoice_id = inl.c_invoice_id WHERE i.docstatus NOT IN ('VO','RE') AND inl.m_inoutline_id = il.m_inoutline_id), 0) > 0")
             ->select(
@@ -1009,13 +1099,14 @@ class ApInvoiceController extends Controller
     // API: Get GR Lines for linking
     public function getGrLines(Request $request)
     {
+        $apInvoiceConfig = config('idempiere.ap-invoice');
         $search = $request->get('q', '');
-        $perPage = 20;
+        $perPage = $apInvoiceConfig['limits']['gr_modal'];
         $page = $request->get('page', 1);
         $clientId = Session::get('idempiere_client');
         $vendorId = $request->get('vendor_id');
 
-        if (strlen($search) < 2) {
+        if (strlen($search) < $apInvoiceConfig['limits']['link_min_search_length']) {
             return response()->json([
                 'results' => [],
                 'pagination' => ['more' => false],
@@ -1029,9 +1120,9 @@ class ApInvoiceController extends Controller
             ->leftJoin('c_uom as u', 'u.c_uom_id', '=', 'il.c_uom_id')
             ->leftJoin('c_orderline as ol', 'ol.c_orderline_id', '=', 'il.c_orderline_id')
             ->where('io.ad_client_id', $clientId)
-            ->where('io.docstatus', 'CO')
-            ->where('io.movementtype', 'V+')
-            ->where('io.issotrx', 'N')
+            ->where('io.docstatus', $apInvoiceConfig['receipt_filters']['doc_status'])
+            ->where('io.movementtype', $apInvoiceConfig['receipt_filters']['movement_type'])
+            ->where('io.issotrx', $apInvoiceConfig['receipt_filters']['is_so_trx'])
             ->where(function ($q) use ($search) {
                 $q->where('io.documentno', 'ilike', "%{$search}%")
                     ->orWhere('p.name', 'ilike', "%{$search}%")
@@ -1077,8 +1168,9 @@ class ApInvoiceController extends Controller
     // API: Get Products
     public function getProducts(Request $request)
     {
+        $apInvoiceConfig = config('idempiere.ap-invoice');
         $search = $request->get('q', '');
-        $perPage = 20;
+        $perPage = $apInvoiceConfig['limits']['products_per_page'];
         $page = $request->get('page', 1);
         $clientId = Session::get('idempiere_client');
 
@@ -1242,6 +1334,10 @@ class ApInvoiceController extends Controller
                 'preparedBy' => $preparedBy,
                 'contactName' => $contactName,
                 'logoBase64' => $logoBase64,
+                'totalLines'      => $invoice->totallines ?? 0,
+                'taxAmount'       => ($invoice->grandtotal ?? 0) - ($invoice->totallines ?? 0),
+                'withholdingTotal'=> $invoice->withholdingamount ?? 0,
+                'grandTotalNet'   => ($invoice->grandtotal ?? 0) - ($invoice->withholdingamount ?? 0),
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'AP-Invoice-' . str_replace(['/', '\\'], '-', $invoice->documentno) . '.pdf';
@@ -1255,17 +1351,8 @@ class ApInvoiceController extends Controller
 
     private function getStatusLabel(?string $status): string
     {
-        $map = [
-            'DR' => 'Draft',
-            'IP' => 'In Progress',
-            'CO' => 'Completed',
-            'CL' => 'Closed',
-            'VO' => 'Voided',
-            'RE' => 'Reversed',
-            'NA' => 'Not Approved',
-            'IN' => 'Invalid',
-            'AP' => 'Approved',
-        ];
-        return $map[$status] ?? ($status ?? 'Unknown');
+        $statusLabels = config('idempiere.ap-invoice.statuses.labels', []);
+
+        return $statusLabels[$status] ?? ($status ?? 'Unknown');
     }
 }

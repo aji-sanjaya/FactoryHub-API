@@ -1,3 +1,10 @@
+@php
+    $requisitionConfig = $requisitionConfig ?? config('idempiere.create-pr');
+    $lineEditableStatuses = $requisitionConfig['statuses']['line_editable'] ?? [];
+    $linePerPageOptions = $requisitionConfig['limits']['line_per_page_options'] ?? [10, 25, 50, 100];
+    $defaultLinePerPage = $requisitionConfig['limits']['line_default_per_page'] ?? 10;
+@endphp
+
 <!-- Lines List Container -->
 <div id="lines-list-container" class="space-y-6">
     <!-- Table Controls (Search & Actions) -->
@@ -11,9 +18,12 @@
             <div class="relative">
                 <select name="per_page" onchange="handlePerPageLines(this.value)"
                     class="border border-gray-200 dark:border-gray-800 h-10 pl-3 pr-8 text-sm bg-gray-50 border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
-                    <option value="10" {{ request('per_page') == 10 ? 'selected' : '' }}>10 rows</option>
-                    <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25 rows</option>
-                    <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50 rows</option>
+                    @php
+                        $selectedPerPage = (int) request('per_page', $defaultLinePerPage);
+                    @endphp
+                    @foreach($linePerPageOptions as $linePerPageOption)
+                        <option value="{{ $linePerPageOption }}" {{ $selectedPerPage === (int) $linePerPageOption ? 'selected' : '' }}>{{ $linePerPageOption }} rows</option>
+                    @endforeach
                 </select>
             </div>
         </div>
@@ -36,7 +46,7 @@
             </div>
 
             <!-- Create Action -->
-            @if(isset($requisition) && in_array($requisition->docstatus, ['DR', 'IN', 'IP']))
+            @if(isset($requisition) && in_array($requisition->docstatus, $lineEditableStatuses, true))
                 <div class="flex items-center gap-2">
                     <button type="button" id="deleteSelectedBtn" onclick="deleteSelectedLines()" style="display: none;"
                         class="inline-flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md transition-all focus:ring-4 focus:ring-red-500/30 gap-2">
@@ -179,7 +189,7 @@
                                         </h3>
                                         <p class="text-gray-500 text-sm mb-6 dark:text-gray-400">Add products to this
                                             requisition to get started.</p>
-                                        @if(isset($requisition) && in_array($requisition->docstatus, ['DR', 'IN', 'IP']))
+                                        @if(isset($requisition) && in_array($requisition->docstatus, $lineEditableStatuses, true))
                                             <button onclick="showCreateLineForm()" type="button"
                                                 class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-brand-700 bg-brand-100 hover:bg-brand-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
                                                 Add First Line

@@ -9,8 +9,10 @@
 </style>
 <div class="px-8 py-6 max-w-7xl mx-auto">
     @php
+        $arInvoiceConfig = config('idempiere.ar-invoice');
+        $readOnlyStatuses = $arInvoiceConfig['statuses']['read_only'] ?? ['CO', 'CL', 'VO', 'RE'];
         $isNew = is_null($invoice);
-        $isReadOnly = !$isNew && in_array($invoice->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $isReadOnly = !$isNew && in_array($invoice->docstatus, $readOnlyStatuses);
         $docNo = $isNew ? '** New **' : $invoice->documentno;
         $clientName = session('idempiere_client_name', 'Dharmamulia Prima Karya');
     @endphp

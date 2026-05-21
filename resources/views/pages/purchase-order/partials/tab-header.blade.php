@@ -97,7 +97,7 @@
                     <label
                         class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">Description</label>
                     <div class="col-span-1 sm:col-span-2">
-                        <textarea id="description" rows="3" {{ $isReadOnly ? 'disabled' : '' }}
+                        <textarea id="description" rows="4" {{ $isReadOnly ? 'disabled' : '' }}
                             class="w-full px-3.5 py-2.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-shadow dark:bg-gray-900 dark:border-gray-600 dark:text-gray-200 placeholder-gray-400 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed text-gray-500' : '' }}"
                             placeholder="Enter purchase order description...">{{ $order ? $order->description : '' }}</textarea>
                     </div>
@@ -183,6 +183,27 @@
                         </select>
                     </div>
                 </div> 
+
+                <!-- Purchase Tax -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label
+                        class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Purchase Tax
+                        <span class="text-red-500">*</span></label>
+                    <div class="col-span-1 sm:col-span-2"> 
+                        <!-- Editable select when no lines exist -->
+                        <select id="c_tax_id" name="c_tax_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                            <option value="">- Select Purchase Tax -</option>
+                            @if(isset($taxesList))
+                                @foreach($taxesList as $tax)
+                                    <option value="{{ $tax->id }}" data-rate="{{ $tax->rate }}" {{ (isset($order) && $order->c_tax_id == $tax->id) ? 'selected' : '' }}>
+                                        {{ $tax->text }}
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select> 
+                    </div>
+                </div>
 
             </div>
         </div>
@@ -270,12 +291,12 @@
                         <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Checked
                             By <span class="text-red-500">*</span></label>
                         <div class="col-span-1 sm:col-span-2">
-                            <select id="dpk_ad_user_checked_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            <select id="adw_ad_user_checked_id" {{ $isReadOnly ? 'disabled' : '' }}
                                 class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
                                 <option value="">- Select -</option>
                                 @if(isset($users))
                                     @foreach($users as $u)
-                                        <option value="{{ $u->id }}" {{ (isset($order) && $order->dpk_ad_user_checked_id == $u->id) ? 'selected' : '' }}>
+                                        <option value="{{ $u->id }}" {{ (isset($order) && $order->adw_ad_user_checked_id == $u->id) ? 'selected' : '' }}>
                                             {{ $u->text }}
                                         </option>
                                     @endforeach
@@ -289,12 +310,12 @@
                         <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Approved
                             By <span class="text-red-500">*</span></label>
                         <div class="col-span-1 sm:col-span-2">
-                            <select id="dpk_ad_user_approved_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            <select id="adw_ad_user_approved_id" {{ $isReadOnly ? 'disabled' : '' }}
                                 class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
                                 <option value="">- Select -</option>
                                 @if(isset($users))
                                     @foreach($users as $u)
-                                        <option value="{{ $u->id }}" {{ (isset($order) && $order->dpk_ad_user_approved_id == $u->id) ? 'selected' : '' }}>
+                                        <option value="{{ $u->id }}" {{ (isset($order) && $order->adw_ad_user_approved_id == $u->id) ? 'selected' : '' }}>
                                             {{ $u->text }}
                                         </option>
                                     @endforeach
@@ -306,29 +327,16 @@
 
             <!-- Right Column -->
             <div class="space-y-5"> 
-
-
-            <!-- Purchase Tax -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                <label
-                    class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Purchase Tax
-                    <span class="text-red-500">*</span></label>
-                <div class="col-span-1 sm:col-span-2"> 
-                    <!-- Editable select when no lines exist -->
-                    <select id="c_tax_id" name="c_tax_id" {{ $isReadOnly ? 'disabled' : '' }}
-                        class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
-                        <option value="">- Select Purchase Tax -</option>
-                        @if(isset($taxesList))
-                            @foreach($taxesList as $tax)
-                                <option value="{{ $tax->id }}" {{ (isset($order) && $order->c_tax_id == $tax->id) ? 'selected' : '' }}>
-                                    {{ $tax->text }}
-                                </option>
-                            @endforeach
-                        @endif
-                    </select> 
-                </div>
-            </div>
             
+            <!-- Total Line Amount (before tax) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Total Amount</label>
+                    <div class="col-span-1 sm:col-span-2">
+                        <input type="text" id="txt_total_lines" value="{{ isset($order) ? number_format($order->totallines, 2) : '0.00' }}" readonly
+                            class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors text-right font-medium">
+                    </div>
+                </div>
+
             <!-- Total Tax Amount -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                     <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Total Tax Amount</label>
@@ -338,11 +346,25 @@
                     </div>
                 </div>
 
+                <!-- Total Other Tax (PPh23 Withholding) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Total Other Tax
+                        <span class="block text-xs text-orange-500 font-normal">(PPh23)</span>
+                    </label>
+                    <div class="col-span-1 sm:col-span-2">
+                        <input type="text" id="txt_withholding_total"
+                            value="{{ isset($order) && $order->withholdingamount ? number_format($order->withholdingamount, 2) : '0.00' }}"
+                            readonly
+                            class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-orange-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-orange-400 transition-colors text-right font-medium">
+                    </div>
+                </div>
+
                 <!-- Grand Total Amount -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                     <label class="text-left sm:text-right text-sm font-bold text-gray-900 dark:text-gray-100">Grand Total Amount</label>
                     <div class="col-span-1 sm:col-span-2">
-                            <input type="text" id="txt_grand_total" value="{{ isset($order) ? number_format($order->grandtotal, 2) : '0.00' }}" readonly
+                            <input type="text" id="txt_grand_total" value="{{ isset($order) ? number_format(($order->grandtotal ?? 0) - ($order->withholdingamount ?? 0), 2) : '0.00' }}" readonly
                             class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-900 font-bold cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-white transition-colors text-right">
                     </div>
                 </div> 

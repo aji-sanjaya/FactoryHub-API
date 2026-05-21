@@ -27,6 +27,8 @@ class PurchaseOrderController extends Controller
      */
     public function index()
     {
+        $purchaseOrderConfig = config('idempiere.create-po');
+
         if (!Session::has('api_token')) {
             return redirect()->route('signin');
         }
@@ -37,7 +39,7 @@ class PurchaseOrderController extends Controller
         }
 
         // List View Logic
-        $perPage = request()->get('per_page', 10);
+        $perPage = (int) request()->get('per_page', $purchaseOrderConfig['limits']['list_per_page']);
         $page = request()->get('page', 1);
         $status = request()->get('status', 'all');
         $search = request()->get('search', '');
@@ -48,7 +50,7 @@ class PurchaseOrderController extends Controller
 
         // Base Query using DB Facade for performance/joins if needed, or Eloquent
         $query = COrder::where('ad_client_id', $clientId)
-            ->where('issotrx', 'N') // Purchase Order
+            ->where('issotrx', $purchaseOrderConfig['defaults']['is_so_trx'])
             ->where('isactive', 'Y');
 
         // Apply Filters (Search, Status, Date) - Simplified for brevity
@@ -65,10 +67,10 @@ class PurchaseOrderController extends Controller
         $orders = $query->paginate($perPage);
 
         // Calculate Counts
-        $countAll = COrder::where('ad_client_id', $clientId)->where('issotrx', 'N')->where('isactive', 'Y')->count();
-        $countDraft = COrder::where('ad_client_id', $clientId)->where('issotrx', 'N')->where('isactive', 'Y')->where('docstatus', 'DR')->count();
-        $countInProgress = COrder::where('ad_client_id', $clientId)->where('issotrx', 'N')->where('isactive', 'Y')->where('docstatus', 'IP')->count();
-        $countCompleted = COrder::where('ad_client_id', $clientId)->where('issotrx', 'N')->where('isactive', 'Y')->whereIn('docstatus', ['CO', 'CL'])->count();
+        $countAll = COrder::where('ad_client_id', $clientId)->where('issotrx', $purchaseOrderConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->count();
+        $countDraft = COrder::where('ad_client_id', $clientId)->where('issotrx', $purchaseOrderConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->whereIn('docstatus', $purchaseOrderConfig['statuses']['draft'])->count();
+        $countInProgress = COrder::where('ad_client_id', $clientId)->where('issotrx', $purchaseOrderConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->whereIn('docstatus', $purchaseOrderConfig['statuses']['in_progress'])->count();
+        $countCompleted = COrder::where('ad_client_id', $clientId)->where('issotrx', $purchaseOrderConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->whereIn('docstatus', $purchaseOrderConfig['statuses']['completed'])->count();
 
         if (request()->ajax()) {
             return response()->json([
@@ -89,6 +91,8 @@ class PurchaseOrderController extends Controller
     // Helper for Form View (Show/Create/Edit)
     private function showForm($docId)
     {
+        $purchaseOrderConfig = config('idempiere.create-po');
+
         $order = null;
         if ($docId !== 'new') {
             try {
@@ -145,7 +149,7 @@ class PurchaseOrderController extends Controller
                 SELECT c_bpartner_id AS id, name AS text
                 FROM c_bpartner
                 WHERE isactive = 'Y' AND ad_client_id = ? AND isvendor='Y'
-                ORDER BY name LIMIT 100
+                ORDER BY name LIMIT {$purchaseOrderConfig['limits']['vendor_search']}
             ", [$clientId]);
 
         // Fetch Users for Checked/Approved By/Contact
@@ -179,13 +183,18 @@ class PurchaseOrderController extends Controller
             SELECT dt.c_doctype_id AS id, dt.name AS text
             FROM c_doctype dt
             WHERE dt.isactive = 'Y'
-            AND dt.docbasetype = 'POO'
-            AND dt.issotrx = 'N'
+            AND dt.docbasetype = ?
+            AND dt.issotrx = ?
             AND dt.ad_client_id = ?
             AND dt.ad_org_id IN (0, ?)
             AND dt.docsubtypeso IS NULL
             ORDER BY dt.c_doctype_id DESC
-        ", [$clientId, $clientId]);
+        ", [
+            $purchaseOrderConfig['doc_types']['base_type'],
+            $purchaseOrderConfig['defaults']['is_so_trx'],
+            $clientId,
+            $clientId,
+        ]);
 
         // Projects
         $projects = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
@@ -207,6 +216,14 @@ class PurchaseOrderController extends Controller
 
         // Lines
         if ($order) {
+            $defaultLinePerPage = $purchaseOrderConfig['limits']['line_default_per_page'];
+            $linePerPageOptions = $purchaseOrderConfig['limits']['line_per_page_options'];
+            $linePerPage = request()->integer('per_page', $defaultLinePerPage);
+
+            if (!in_array($linePerPage, $linePerPageOptions, true)) {
+                $linePerPage = $defaultLinePerPage;
+            }
+
             $lines = \Illuminate\Support\Facades\DB::connection('idempiere')
                 ->table('c_orderline as ol')
                 ->leftJoin('m_product as p', 'ol.m_product_id', '=', 'p.m_product_id')
@@ -223,6 +240,9 @@ class PurchaseOrderController extends Controller
                     'ol.linenetamt',
                     'ol.description',
                     'ol.m_requisitionline_id',
+                    'ol.iswithholding as is_withholding',
+                    'ol.withholdingrate as withholding_rate',
+                    'ol.withholdingamount as withholding_amount',
                     'p.name as product_name',
                     'p.value as product_code',
                     'u.name as uom_name',
@@ -230,10 +250,10 @@ class PurchaseOrderController extends Controller
                     'r.documentno as requisition_documentno'
                 )
                 ->orderBy('ol.line')
-                ->paginate(10);
+                ->paginate($linePerPage);
         } else {
             // Return empty paginator for new orders
-            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
+            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $purchaseOrderConfig['limits']['line_default_per_page']);
         }
         // Taxes
         $taxes = [];
@@ -253,7 +273,7 @@ class PurchaseOrderController extends Controller
         if ($order) {
             $statusLabel = $this->getStatusLabel($order->docstatus);
         } else {
-            $statusLabel = 'Draft'; // Default for new documents
+            $statusLabel = $purchaseOrderConfig['defaults']['document_status_label'];
         }
 
         // Check Active Workflow
@@ -262,7 +282,7 @@ class PurchaseOrderController extends Controller
             $hasActiveWorkflow = \Illuminate\Support\Facades\DB::connection('idempiere')
                 ->table('ad_wf_activity')
                 ->join('ad_table', 'ad_table.ad_table_id', '=', 'ad_wf_activity.ad_table_id')
-                ->where('ad_table.tablename', 'C_Order') // Hardcoded table name for safety
+                ->where('ad_table.tablename', $purchaseOrderConfig['workflow']['table_name'])
                 ->where('ad_wf_activity.record_id', $order->c_order_id)
                 ->where('ad_wf_activity.processed', 'N')
                 ->exists();
@@ -288,7 +308,7 @@ class PurchaseOrderController extends Controller
             'dateOrdered' => $order && $order->dateordered ? \Illuminate\Support\Carbon::parse($order->dateordered)->format('Y-m-d') : date('Y-m-d'),
             'datePromised' => $order && $order->datepromised ? \Illuminate\Support\Carbon::parse($order->datepromised)->format('Y-m-d') : date('Y-m-d'),
             'docIdParam' => request('document_id'),
-            'isReadOnly' => $order && in_array($order->docstatus, ['CO', 'CL', 'VO', 'RE']),
+            'isReadOnly' => $order && in_array($order->docstatus, $purchaseOrderConfig['statuses']['read_only'], true),
             'isDraft' => $order && $order->docstatus === 'DR',
             'activeTab' => request('tab', 'header'),
             'salesRepId' => $order && $order->salesrep_id ? $order->salesrep_id : ($sessionUserId ?? null),
@@ -296,13 +316,14 @@ class PurchaseOrderController extends Controller
             // 'taxes' => $taxes, // Correct via previous line
             'taxesList' => $taxesList,
             'hasActiveWorkflow' => $hasActiveWorkflow,
+            'purchaseOrderConfig' => $purchaseOrderConfig,
         ];
 
         // Set docTypeId explicitly
         if ($order && isset($order->c_doctypetarget_id)) {
             $viewData['docTypeId'] = $order->c_doctypetarget_id;
         } else {
-            $viewData['docTypeId'] = 1000048; // Force default for new documents
+            $viewData['docTypeId'] = $purchaseOrderConfig['doc_types']['purchase_order'];
         }
 
         // Debug logging
@@ -360,6 +381,8 @@ class PurchaseOrderController extends Controller
     // Store Header
     public function store(Request $request)
     {
+        $purchaseOrderConfig = config('idempiere.create-po');
+
         // 1. Validate Form Input
         $validated = $request->validate([
             'org_id' => 'required',
@@ -372,8 +395,8 @@ class PurchaseOrderController extends Controller
             'description' => 'nullable|string',
             'priority_rule' => 'nullable|string',
             'c_paymentterm_id' => 'nullable|numeric',
-            'dpk_ad_user_checked_id' => 'required|numeric',
-            'dpk_ad_user_approved_id' => 'required|numeric',
+            'adw_ad_user_checked_id' => 'required|numeric',
+            'adw_ad_user_approved_id' => 'required|numeric',
             'c_project_id' => 'nullable',
             'c_tax_id' => 'required|numeric',
         ]);
@@ -431,7 +454,7 @@ class PurchaseOrderController extends Controller
             'M_PriceList_ID' => (int) $validated['pricelist_id'],
             'DateOrdered' => $validated['date_ordered'],
             'Description' => $validated['description'],
-            'IsSOTrx' => 'N',
+            'IsSOTrx' => $purchaseOrderConfig['defaults']['is_so_trx'],
 
             // Vendors & Locations
             'C_BPartner_ID' => $bpartnerId,
@@ -444,10 +467,10 @@ class PurchaseOrderController extends Controller
             'Bill_User_ID' => $adUserId,
 
             // New Defaults Requested
-            'DeliveryViaRule' => 'P', // Pickup
-            'PriorityRule' => $validated['priority_rule'] ?? '5',
-            'C_Currency_ID' => 303, // IDR
-            'PaymentRule' => 'P',
+            'DeliveryViaRule' => $purchaseOrderConfig['defaults']['delivery_via_rule'],
+            'PriorityRule' => $validated['priority_rule'] ?? $purchaseOrderConfig['defaults']['priority_rule'],
+            'C_Currency_ID' => $purchaseOrderConfig['defaults']['currency_id'],
+            'PaymentRule' => $purchaseOrderConfig['defaults']['payment_rule'],
 
             // Company Agent (Sales Rep) - User Request: same as creator
             'SalesRep_ID' => (int) $sessionUserId,
@@ -461,10 +484,10 @@ class PurchaseOrderController extends Controller
 
         // Custom DPK Fields (USER REQUESTED THESE BE INCLUDED)
         // If these still cause 500 error, the columns are missing in DB.
-        if (!empty($validated['dpk_ad_user_checked_id']))
-            $payload['DPK_AD_User_Checked_ID'] = (int) $validated['dpk_ad_user_checked_id'];
-        if (!empty($validated['dpk_ad_user_approved_id']))
-            $payload['DPK_AD_User_Approved_ID'] = (int) $validated['dpk_ad_user_approved_id'];
+        if (!empty($validated['adw_ad_user_checked_id']))
+            $payload['ADW_AD_User_Checked_ID'] = (int) $validated['adw_ad_user_checked_id'];
+        if (!empty($validated['adw_ad_user_approved_id']))
+            $payload['ADW_AD_User_Approved_ID'] = (int) $validated['adw_ad_user_approved_id'];
 
         // C_Tax_ID (Mandatory)
         if (!empty($validated['c_tax_id']))
@@ -530,8 +553,8 @@ class PurchaseOrderController extends Controller
             'date_promised' => 'nullable|date_format:Y-m-d',
             'priority_rule' => 'nullable|string',
             'c_paymentterm_id' => 'nullable|numeric',
-            'dpk_ad_user_checked_id' => 'required|numeric',
-            'dpk_ad_user_approved_id' => 'required|numeric',
+            'adw_ad_user_checked_id' => 'required|numeric',
+            'adw_ad_user_approved_id' => 'required|numeric',
             'doc_type_id' => 'nullable',
             'c_project_id' => 'nullable',
             'c_tax_id' => 'required|numeric',
@@ -561,10 +584,10 @@ class PurchaseOrderController extends Controller
             $payload['C_PaymentTerm_ID'] = (int) $validated['c_paymentterm_id'];
 
         // Custom DPK Fields (Uncommented as requested)
-        if (!empty($validated['dpk_ad_user_checked_id']))
-            $payload['DPK_AD_User_Checked_ID'] = (int) $validated['dpk_ad_user_checked_id'];
-        if (!empty($validated['dpk_ad_user_approved_id']))
-            $payload['DPK_AD_User_Approved_ID'] = (int) $validated['dpk_ad_user_approved_id'];
+        if (!empty($validated['adw_ad_user_checked_id']))
+            $payload['ADW_AD_User_Checked_ID'] = (int) $validated['adw_ad_user_checked_id'];
+        if (!empty($validated['adw_ad_user_approved_id']))
+            $payload['ADW_AD_User_Approved_ID'] = (int) $validated['adw_ad_user_approved_id'];
 
         if (!empty($validated['doc_type_id']))
             $payload['C_DocTypeTarget_ID'] = (int) $validated['doc_type_id'];
@@ -609,11 +632,12 @@ class PurchaseOrderController extends Controller
     // API: Get Products
     public function getProducts(Request $request)
     {
+        $purchaseOrderConfig = config('idempiere.create-po');
         // Reuse similar logic to Requisition or extract to Service. 
         // For now, simple implementation directly querying DB.
         $search = $request->get('q');
         $page = $request->get('page', 1);
-        $perPage = 25;
+        $perPage = $purchaseOrderConfig['limits']['products_per_page'];
         $clientId = Session::get('idempiere_client');
 
         if (!$clientId)
@@ -663,12 +687,13 @@ class PurchaseOrderController extends Controller
     // API: Get Requisition Lines
     public function getRequisitionLines(Request $request)
     {
+        $purchaseOrderConfig = config('idempiere.create-po');
         $clientId = Session::get('idempiere_client');
         $search = $request->get('q', '');
         $page = $request->get('page', 1);
-        $perPage = 100; // Larger default for modal
+        $perPage = $purchaseOrderConfig['limits']['requisition_modal'];
 
-        if (strlen($search) < 3) {
+        if (strlen($search) < $purchaseOrderConfig['limits']['requisition_min_search_length']) {
             return response()->json([
                 'results' => [],
                 'pagination' => ['more' => false],
@@ -736,6 +761,8 @@ class PurchaseOrderController extends Controller
             'c_tax_id' => 'required|numeric', // Add validation
             'description' => 'nullable|string',
             'm_requisitionline_id' => 'nullable|numeric', // New Field
+            'is_withholding'   => 'nullable',
+            'withholding_rate' => 'nullable|numeric|min:0',
         ]);
 
         try {
@@ -750,6 +777,11 @@ class PurchaseOrderController extends Controller
             $qty = (float) $validated['qty'];
             $price = (float) $validated['price'];
             $lineNet = $qty * $price;
+
+            // Withholding Tax (PPh23)
+            $isWithholding   = $request->boolean('is_withholding');
+            $withholdingRate = (float) ($validated['withholding_rate'] ?? 0);
+            $withholdingAmt  = $isWithholding ? round($lineNet * $withholdingRate / 100, 2) : 0;
 
             // ── Requisition Qty Validation ──────────────────────────────────────
             // Only validate when the line is linked to a requisition line.
@@ -809,6 +841,9 @@ class PurchaseOrderController extends Controller
                 'Discount' => 0.0,
                 'Description' => $validated['description'] ?? null,
                 'C_Tax_ID' => (int) $validated['c_tax_id'],
+                'IsWithholding'     => $isWithholding ? 'Y' : 'N',
+                'WithholdingRate'   => $withholdingRate,
+                'WithholdingAmount' => $withholdingAmt,
             ];
 
             if (!empty($validated['m_requisitionline_id'])) {
@@ -830,17 +865,31 @@ class PurchaseOrderController extends Controller
             }
 
             if ($response->successful()) {
+                // Sum withholdingamount from all lines and update c_order header
+                $totalWithholding = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('c_orderline')
+                    ->where('c_order_id', $orderId)
+                    ->sum('withholdingamount');
+
+                \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('c_order')
+                    ->where('c_order_id', $orderId)
+                    ->update(['withholdingamount' => $totalWithholding ?? 0]);
+
                 // Fetch updated order totals
                 $order = \Illuminate\Support\Facades\DB::connection('idempiere')
                     ->table('c_order')
                     ->where('c_order_id', $orderId)
-                    ->select('grandtotal', 'totallines')
+                    ->select('grandtotal', 'totallines', 'withholdingamount')
                     ->first();
 
                 return response()->json([
                     'message' => "Line $action successfully",
+                    'total_lines' => number_format($order->totallines ?? 0, 2),
                     'grandtotal' => number_format($order->grandtotal ?? 0, 2),
-                    'tax_amount' => number_format(($order->grandtotal ?? 0) - ($order->totallines ?? 0), 2)
+                    'tax_amount' => number_format(($order->grandtotal ?? 0) - ($order->totallines ?? 0), 2),
+                    'withholding_total' => number_format($order->withholdingamount ?? 0, 2),
+                    'grand_total_net' => number_format(($order->grandtotal ?? 0) - ($order->withholdingamount ?? 0), 2),
                 ]);
             } else {
                 Log::error("PO Line Error ($action): " . $response->body());
@@ -906,9 +955,10 @@ class PurchaseOrderController extends Controller
     }
     public function process(Request $request)
     {
+        $purchaseOrderConfig = config('idempiere.create-po');
         $validated = $request->validate([
             'document_id' => 'required',
-            'doc_action' => 'required|in:CO,PR,VO,CL,RE',
+            'doc_action' => 'required|in:' . implode(',', $purchaseOrderConfig['workflow']['allowed_actions']),
         ]);
 
         try {
@@ -927,14 +977,16 @@ class PurchaseOrderController extends Controller
             $response = $this->idempiereService->put("models/c_order/{$orderId}", $payload);
 
             if ($response->successful()) {
-                if ($validated['doc_action'] === 'RE') {
+                if ($validated['doc_action'] === 'CO') {
                     // Manual DB update as requested to ensure custom columns are cleared
                     \Illuminate\Support\Facades\DB::connection('idempiere')
                         ->table('c_order')
                         ->where('c_order_id', $orderId)
                         ->update([
-                            'dpk_checked_date' => null,
-                            'dpk_approved_date' => null
+                            'adw_checked_date' => null,
+                            'adw_approved_date' => null,
+                            'adw_checked_isapproved' => null,
+                            'adw_approve_isapproved' => null,
                         ]);
                 }
 
@@ -1121,17 +1173,35 @@ class PurchaseOrderController extends Controller
                 )
                 ->first();
 
-            // Fetch Org Info
-            $orgInfo = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_orginfo')
-                ->where('ad_org_id', $order->ad_org_id)
-                ->first();
+            // Fetch Client Name
+            $clientName = \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $order->ad_client_id)
+                ->value('name');
+
+            // Fetch Org address via c_bpartner → c_bpartner_location → c_location
+            $orgInfo = null;
+            try {
+                $orgInfo = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('c_bpartner as bp')
+                    ->leftJoin('c_bpartner_location as bpl', function ($join) {
+                        $join->on('bp.c_bpartner_id', '=', 'bpl.c_bpartner_id')
+                             ->where('bpl.isactive', '=', 'Y');
+                    })
+                    ->leftJoin('c_location as locbp', 'bpl.c_location_id', '=', 'locbp.c_location_id')
+                    ->where('bp.c_bpartner_id', config('idempiere.client_id'))
+                    ->select('bp.taxid', 'locbp.address1', 'locbp.address2', 'locbp.address3')
+                    ->first();
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('PO Org info fetch warning: ' . $e->getMessage());
+            }
 
             // Fetch Signers Names from Custom Columns
-            $checkedBy = $order->dpk_ad_user_checked_id ?
-                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->dpk_ad_user_checked_id)->value('description') : null;
+            $checkedBy = $order->adw_ad_user_checked_id ?
+                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->adw_ad_user_checked_id)->value('description') : null;
 
-            $approvedBy = $order->dpk_ad_user_approved_id ?
-                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->dpk_ad_user_approved_id)->value('description') : null;
+            $approvedBy = $order->adw_ad_user_approved_id ?
+                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->adw_ad_user_approved_id)->value('description') : null;
 
             // Creator as Prepared By
             $preparedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->createdby)->value('description');
@@ -1142,10 +1212,10 @@ class PurchaseOrderController extends Controller
             $checkedQr = null;
             $checkedDate = 'Pending'; // Default when not yet actioned
             if ($checkedBy) {
-                if ($order->dpk_checked_isapproved == 'AP' && $order->dpk_checked_date) {
-                    $checkedDate = date('d M Y H:i', strtotime($order->dpk_checked_date));
-                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $order->dpk_checked_date);
-                } elseif ($order->dpk_checked_isapproved == 'RE') {
+                if ($order->adw_checked_isapproved == 'AP' && $order->adw_checked_date) {
+                    $checkedDate = date('d M Y H:i', strtotime($order->adw_checked_date));
+                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $order->adw_checked_date);
+                } elseif ($order->adw_checked_isapproved == 'RE') {
                     $checkedDate = 'Rejected';
                 }
             }
@@ -1154,10 +1224,10 @@ class PurchaseOrderController extends Controller
             $approvedQr = null;
             $approvedDate = 'Pending'; // Default when not yet actioned
             if ($approvedBy) {
-                if ($order->dpk_approve_isapproved == 'AP' && $order->dpk_approved_date) {
-                    $approvedDate = date('d M Y H:i', strtotime($order->dpk_approved_date));
-                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $order->dpk_approved_date);
-                } elseif ($order->dpk_approve_isapproved == 'RE') {
+                if ($order->adw_approve_isapproved == 'AP' && $order->adw_approved_date) {
+                    $approvedDate = date('d M Y H:i', strtotime($order->adw_approved_date));
+                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $order->adw_approved_date);
+                } elseif ($order->adw_approve_isapproved == 'RE') {
                     $approvedDate = 'Rejected';
                 }
             }
@@ -1240,6 +1310,7 @@ class PurchaseOrderController extends Controller
                 'lines' => $lines,
                 'vendor' => $vendor,
                 'orgInfo' => $orgInfo,
+                'clientName' => $clientName,
                 'paymentTerm' => $paymentTerm,
                 'preparedBy' => $preparedBy,
                 'checkedBy' => $checkedBy,
@@ -1254,6 +1325,7 @@ class PurchaseOrderController extends Controller
                 'taxAmount' => $taxAmount ?? 0,
                 'taxName' => $taxName ?? 'PPN',
                 'taxRate' => $taxRate ?? 0,
+                'withholdingTotal' => $order->withholdingamount ?? 0,
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'PO-' . str_replace(['/', '\\'], '-', $order->documentno) . '.pdf';
@@ -1267,17 +1339,8 @@ class PurchaseOrderController extends Controller
 
     private function getStatusLabel(?string $status): string
     {
-        return match ($status) {
-            'DR' => 'Draft',
-            'IP' => 'In Progress',
-            'CO' => 'Completed',
-            'CL' => 'Closed',
-            'VO' => 'Voided',
-            'RE' => 'Reversed',
-            'AP' => 'Approved',
-            'NA' => 'Not Approved',
-            'IN' => 'Invalid',
-            default => $status ?? 'Unknown',
-        };
+        $statusLabels = config('idempiere.create-po.statuses.labels', []);
+
+        return $statusLabels[$status] ?? ($status ?? 'Unknown');
     }
 }

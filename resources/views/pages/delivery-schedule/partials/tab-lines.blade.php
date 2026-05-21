@@ -1,6 +1,13 @@
 {{-- Expose price list precision to JS for use in product select change handler --}}
+@php
+    $deliveryScheduleConfig = $deliveryScheduleConfig ?? config('idempiere.delivery-schedule');
+    $lineEditableStatuses = $deliveryScheduleConfig['statuses']['line_editable'] ?? [];
+    $linePerPageOptions = $deliveryScheduleConfig['limits']['line_per_page_options'] ?? [10, 25, 50, 100];
+    $defaultLinePerPage = $deliveryScheduleConfig['limits']['line_default_per_page'] ?? 10;
+@endphp
+
 <script>
-    window.priceListPrecision = {{ $priceListPrecision ?? 2 }};
+    window.priceListPrecision = {{ $priceListPrecision ?? ($deliveryScheduleConfig['defaults']['price_precision'] ?? 2) }};
     window.headerDatePromised = '{{ $deliverySchedule?->datepromised ?? '' }}';
 </script>
 
@@ -17,9 +24,12 @@
             <div class="relative">
                 <select name="per_page" onchange="handlePerPageLines(this.value)"
                     class="border border-gray-200 dark:border-gray-800 h-10 pl-3 pr-8 text-sm bg-gray-50 border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
-                    <option value="10" {{ request('per_page') == 10 ? 'selected' : '' }}>10 rows</option>
-                    <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25 rows</option>
-                    <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50 rows</option>
+                    @php
+                        $selectedPerPage = (int) request('per_page', $defaultLinePerPage);
+                    @endphp
+                    @foreach($linePerPageOptions as $linePerPageOption)
+                        <option value="{{ $linePerPageOption }}" {{ $selectedPerPage === (int) $linePerPageOption ? 'selected' : '' }}>{{ $linePerPageOption }} rows</option>
+                    @endforeach
                 </select>
             </div>
         </div>
@@ -42,7 +52,7 @@
             </div>
 
             <!-- Create Action -->
-            @if(isset($deliverySchedule) && in_array($deliverySchedule->docstatus, ['DR', 'IN', 'IP']))
+            @if(isset($deliverySchedule) && in_array($deliverySchedule->docstatus, $lineEditableStatuses, true))
                 <div class="flex items-center gap-2">
                     <button type="button" id="deleteSelectedBtn" onclick="deleteSelectedLines()" style="display: none;"
                         class="inline-flex items-center justify-center px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md transition-all focus:ring-4 focus:ring-red-500/30 gap-2">
@@ -167,7 +177,7 @@
                                     @if(!$isReadOnly)
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
-                                                onclick="editLine({{ $line->c_orderline_id }}, '{{ addslashes($line->product_code) }} - {{ addslashes($line->product_name) }}', {{ $line->m_product_id }}, {{ $line->qty }}, {{ $line->priceactual }}, '{{ addslashes($line->description) }}', {{ $line->line }}, '{{ $line->uom_name }}', {{ $line->uom_precision ?? 2 }}, {{ $line->qtydelivered ?? 0 }}, {{ $line->qtyinvoiced ?? 0 }}, '{{ $line->datepromised ?? '' }}', '{{ $line->ref_so_documentno ?? '' }}', '{{ $line->ref_so_line ?? '' }}')"
+                                                onclick="editLine({{ $line->c_orderline_id }}, '{{ addslashes($line->product_code) }} - {{ addslashes($line->product_name) }}', {{ $line->m_product_id }}, {{ $line->qty }}, {{ $line->priceactual }}, '{{ addslashes($line->description) }}', {{ $line->line }}, '{{ $line->uom_name }}', {{ $line->uom_precision ?? ($deliveryScheduleConfig['defaults']['price_precision'] ?? 2) }}, {{ $line->qtydelivered ?? 0 }}, {{ $line->qtyinvoiced ?? 0 }}, '{{ $line->datepromised ?? '' }}', '{{ $line->ref_so_documentno ?? '' }}', '{{ $line->ref_so_line ?? '' }}')"
                                                 class="btn btn-sm btn-warning bg-yellow-100 me-1 p-2 rounded-sm" title="Edit">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -204,7 +214,7 @@
                                         </h3>
                                         <p class="text-gray-500 text-sm mb-6 dark:text-gray-400">Add products to this
                                             delivery-schedule to get started.</p>
-                                        @if(isset($deliverySchedule) && in_array($deliverySchedule->docstatus, ['DR', 'IN', 'IP']))
+                                        @if(isset($deliverySchedule) && in_array($deliverySchedule->docstatus, $lineEditableStatuses, true))
                                             <button onclick="openFromSOModal()" type="button"
                                                 class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-brand-700 bg-brand-100 hover:bg-brand-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">
                                                 From SO
@@ -321,7 +331,7 @@
                                     <span class="text-gray-500 sm:text-sm">Rp</span>
                                 </div>
                                 <input type="text" id="line_price" name="price" oninput="formatNumber(this)" onblur="enforceDecimals(this)"
-                                    data-precision="{{ $priceListPrecision ?? 2 }}"
+                                    data-precision="{{ $priceListPrecision ?? ($deliveryScheduleConfig['defaults']['price_precision'] ?? 2) }}"
                                     class="block w-full rounded-lg border-gray-300 pl-10 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white sm:text-sm h-11 shadow-sm"
                                     placeholder="0.00">
                             </div>

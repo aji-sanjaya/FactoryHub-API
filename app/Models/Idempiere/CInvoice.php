@@ -46,6 +46,7 @@ class CInvoice extends Model
         'ispaid',
         'isapproved',
         'processed',
+        'withholdingamount',
     ];
 
     public function getStatusLabelAttribute()

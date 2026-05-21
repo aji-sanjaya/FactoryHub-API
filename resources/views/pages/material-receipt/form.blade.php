@@ -3,6 +3,7 @@
 @section('content')
 
     @php
+        $materialReceiptConfig = $materialReceiptConfig ?? config('idempiere.create-gr');
         $isNew       = is_null($receipt);
         $activeTab   = $activeTab ?? 'header';
         $docNo       = $isNew ? '** New **' : $receipt->documentno;
@@ -25,7 +26,19 @@
         $movementDate  = $isNew ? now()->format('Y-m-d') : \Carbon\Carbon::parse($receipt->movementdate)->format('Y-m-d');
         $dateAcct      = $isNew ? now()->format('Y-m-d') : \Carbon\Carbon::parse($receipt->dateacct ?? $receipt->movementdate)->format('Y-m-d');
         $docIdParam    = request('document_id');
-        $isReadOnly    = !$isNew && in_array($receipt->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $isReadOnly    = !$isNew && in_array($receipt->docstatus, $materialReceiptConfig['statuses']['read_only'], true);
+        $draftStatuses = $materialReceiptConfig['statuses']['draft'] ?? ['DR'];
+        $isDraft       = !$isNew && in_array($receipt->docstatus, $draftStatuses, true);
+        $headerBadgeClasses = $materialReceiptConfig['statuses']['header_badge_classes'] ?? [];
+        $hColor = $headerBadgeClasses[$receipt->docstatus ?? 'DR'] ?? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+        $workflowConfig = $materialReceiptConfig['workflow'] ?? [];
+        $completeFromStatuses = $workflowConfig['complete_from'] ?? [];
+        $voidFromStatuses = $workflowConfig['void_from'] ?? [];
+        $reverseFromStatuses = $workflowConfig['reverse_from'] ?? [];
+        $closeFromStatuses = $workflowConfig['close_from'] ?? [];
+        $workflowActionLabels = $workflowConfig['action_labels'] ?? [];
+        $workflowConfirmationMessages = $workflowConfig['confirmation_messages'] ?? [];
+        $workflowActionDescriptions = $workflowConfig['button_descriptions'] ?? [];
     @endphp
 
     <div>
@@ -44,15 +57,6 @@
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
                         @if(!$isNew)
-                            @php
-                                $hColor = match($receipt ? $receipt->docstatus : 'DR') {
-                                    'NA','VO','RE' => 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-                                    'CO','CL','AP' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-                                    'IP'           => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-                                    'DR'           => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-                                    default        => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                                };
-                            @endphp
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $hColor }}">{{ $status }}</span>
                             <span class="text-gray-300">•</span>
                         @endif
@@ -165,49 +169,51 @@
                 </div>
                 <div class="px-6 py-5 space-y-3">
                     @php $cs = $receipt->docstatus ?? 'DR'; @endphp
-                    @if(in_array($cs, ['DR', 'IN']))
+                    @if(in_array($cs, $completeFromStatuses, true))
                         <button onclick="processDocument('CO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/40 transition-colors group">
                             <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-green-800 dark:text-green-300">Complete</div>
-                                <div class="text-xs text-green-600 dark:text-green-400">Process and complete this receipt</div>
+                                <div class="text-sm font-medium text-green-800 dark:text-green-300">{{ $workflowActionLabels['CO'] ?? 'Complete' }}</div>
+                                <div class="text-xs text-green-600 dark:text-green-400">{{ $workflowActionDescriptions['CO'] ?? 'Process and complete this receipt' }}</div>
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'DR')
+                    @if(in_array($cs, $voidFromStatuses, true))
                         <button onclick="processDocument('VO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/40 transition-colors group">
                             <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-red-800 dark:text-red-300">Void</div>
-                                <div class="text-xs text-red-600 dark:text-red-400">Void this receipt document</div>
+                                <div class="text-sm font-medium text-red-800 dark:text-red-300">{{ $workflowActionLabels['VO'] ?? 'Void' }}</div>
+                                <div class="text-xs text-red-600 dark:text-red-400">{{ $workflowActionDescriptions['VO'] ?? 'Void this receipt document' }}</div>
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'CO')
+                    @if(in_array($cs, $reverseFromStatuses, true))
                         <button onclick="processDocument('RC')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:border-orange-800 dark:hover:bg-orange-900/40 transition-colors group">
                             <div class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-orange-800 dark:text-orange-300">Reverse</div>
-                                <div class="text-xs text-orange-600 dark:text-orange-400">Reverse this completed receipt</div>
+                                <div class="text-sm font-medium text-orange-800 dark:text-orange-300">{{ $workflowActionLabels['RC'] ?? 'Reverse' }}</div>
+                                <div class="text-xs text-orange-600 dark:text-orange-400">{{ $workflowActionDescriptions['RC'] ?? 'Reverse this completed receipt' }}</div>
                             </div>
                         </button>
+                    @endif
+                    @if(in_array($cs, $closeFromStatuses, true))
                         <button onclick="processDocument('CL')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800/80 transition-colors group">
                             <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-gray-800 dark:text-gray-300">Close</div>
-                                <div class="text-xs text-gray-600 dark:text-gray-400">Close this receipt document</div>
+                                <div class="text-sm font-medium text-gray-800 dark:text-gray-300">{{ $workflowActionLabels['CL'] ?? 'Close' }}</div>
+                                <div class="text-xs text-gray-600 dark:text-gray-400">{{ $workflowActionDescriptions['CL'] ?? 'Close this receipt document' }}</div>
                             </div>
                         </button>
                     @endif
@@ -436,14 +442,15 @@
 
         function processDocument(action) {
             closeDocumentActionModal();
-            const actionNames = { CO: 'Complete', VO: 'Void', RC: 'Reverse', CL: 'Close' };
+            const actionNames = @json($workflowActionLabels);
+            const actionConfirmations = @json($workflowConfirmationMessages);
             Swal.fire({
-                title: actionNames[action] + ' Receipt?',
-                text: 'Are you sure you want to ' + actionNames[action].toLowerCase() + ' this receipt?',
+                title: (actionNames[action] || action) + ' Receipt?',
+                text: actionConfirmations[action] || ('Are you sure you want to ' + (actionNames[action] || action).toLowerCase() + ' this receipt?'),
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: action === 'CO' ? '#16a34a' : action === 'VO' ? '#dc2626' : '#d97706',
-                confirmButtonText: 'Yes, ' + actionNames[action],
+                confirmButtonText: 'Yes, ' + (actionNames[action] || action),
                 cancelButtonText: 'Cancel'
             }).then(result => {
                 if (result.isConfirmed) {

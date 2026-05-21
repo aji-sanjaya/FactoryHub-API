@@ -19,6 +19,10 @@ class ApprovalPrController extends Controller
 
     public function index(Request $request)
     {
+        $approvalConfig = config('idempiere.approval-pr');
+        $statusConfig = $approvalConfig['statuses'];
+        $workflowConfig = $approvalConfig['workflow'];
+
         // Check Authentication
         if (!Session::has('api_token')) {
             return redirect()->route('signin');
@@ -37,15 +41,15 @@ class ApprovalPrController extends Controller
         }
 
         $selectedCostCenter = null;
-        if ($request->has('dpk_cost_center_id') && $request->dpk_cost_center_id) {
-            $selectedCostCenter = \Illuminate\Support\Facades\DB::connection('idempiere')->table('dpk_cost_center')
-                ->where('dpk_cost_center_id', $request->dpk_cost_center_id)
-                ->select('dpk_cost_center_id as id', 'name as text')
+        if ($request->has('c_costcenter_id') && $request->c_costcenter_id) {
+            $selectedCostCenter = \Illuminate\Support\Facades\DB::connection('idempiere')->table('c_costcenter')
+                ->where('c_costcenter_id', $request->c_costcenter_id)
+                ->select('c_costcenter_id as id', 'name as text')
                 ->first();
         }
 
         // Query with Joins
-        // Note: c_bpartner_id is usually on Lines, not Header. dpk_cost_center_id is assumed on Header.
+        // Note: c_bpartner_id is usually on Lines, not Header. c_costcenter_id is assumed on Header.
         $query = MRequisition::query()
             ->select(
                 'm_requisition.*',
@@ -64,16 +68,16 @@ class ApprovalPrController extends Controller
                 ->join('ad_wf_activity as a', 'a.ad_wf_process_id', '=', 'p.ad_wf_process_id')
                 ->join('ad_wf_responsible as wr', 'wr.ad_wf_responsible_id', '=', 'a.ad_wf_responsible_id')
                 ->whereColumn('p.record_id', 'm_requisition.m_requisition_id')
-                ->where('p.ad_table_id', 702) // M_Requisition
-                ->where('a.wfstate', 'OS')
+                ->where('p.ad_table_id', $workflowConfig['table_id'])
+                ->where('a.wfstate', $workflowConfig['open_state'])
                 ->where('a.isactive', 'Y')
                 // Check if responsibility is assigned to current Role
                 ->where('wr.ad_role_id', $roleId)
                 ->selectRaw('COUNT(*)')
         ]);
 
-        $query->leftJoin('dpk_cost_center as cc', 'cc.dpk_cost_center_id', '=', 'm_requisition.dpk_cost_center_id')
-            ->whereNotIn('m_requisition.docstatus', ['DR', 'CL']); // Exclude Draft and Closed
+        $query->leftJoin('c_costcenter as cc', 'cc.c_costcenter_id', '=', 'm_requisition.c_costcenter_id')
+            ->whereNotIn('m_requisition.docstatus', $statusConfig['exclude_from_list']);
 
         if ($clientId) {
             $query->where('m_requisition.ad_client_id', $clientId);
@@ -97,19 +101,16 @@ class ApprovalPrController extends Controller
         $statsBase = clone $statsQuery;
         $statsBase->whereBetween('datedoc', [$startOfMonth, $endOfMonth]);
 
-        $countPending = (clone $statsBase)->where('docstatus', 'IP')->count();
-        $countApproved = (clone $statsBase)->whereIn('docstatus', ['CO', 'CL'])->count();
-        $countRejected = (clone $statsBase)->where('docstatus', 'VO')->count();
+        $countPending = (clone $statsBase)->where('docstatus', $statusConfig['pending'])->count();
+        $countApproved = (clone $statsBase)->whereIn('docstatus', $statusConfig['approved'])->count();
+        $countRejected = (clone $statsBase)->where('docstatus', $statusConfig['rejected'])->count();
         $countAll = $statsBase->count();
 
         // Filtering List
-        $status = $request->get('status', 'IP');
-        if ($status !== 'ALL') {
-            // Handle status (assuming column exists)
-            if ($status === 'APPROVED') {
-                $query->whereIn('m_requisition.docstatus', ['CO', 'CL']);
-            } elseif ($status === 'REJECTED') {
-                $query->where('m_requisition.docstatus', 'VO');
+        $status = $request->get('status', $approvalConfig['defaults']['status_filter']);
+        if ($status !== $approvalConfig['defaults']['all_filter_value']) {
+            if (isset($statusConfig['filter_aliases'][$status])) {
+                $query->whereIn('m_requisition.docstatus', $statusConfig['filter_aliases'][$status]);
             } else {
                 $query->where('m_requisition.docstatus', $status);
             }
@@ -140,11 +141,11 @@ class ApprovalPrController extends Controller
                     ->where('rlfilter.c_bpartner_id', $request->c_bpartner_id);
             });
         }
-        if ($request->has('dpk_cost_center_id') && $request->dpk_cost_center_id) {
-            $query->where('m_requisition.dpk_cost_center_id', $request->dpk_cost_center_id);
+        if ($request->has('c_costcenter_id') && $request->c_costcenter_id) {
+            $query->where('m_requisition.c_costcenter_id', $request->c_costcenter_id);
         }
 
-        $requisitions = $query->orderBy('m_requisition.datedoc', 'desc')->paginate(10);
+        $requisitions = $query->orderBy('m_requisition.datedoc', 'desc')->paginate($approvalConfig['limits']['list_per_page']);
 
         if ($request->ajax()) {
             return view('pages.approval-pr.partials.table', compact('requisitions'));
@@ -163,10 +164,11 @@ class ApprovalPrController extends Controller
 
     public function getSuppliers(Request $request)
     {
+        $approvalConfig = config('idempiere.approval-pr');
         $clientId = Session::get('idempiere_client');
         $search = $request->term;
         $page = $request->page ?? 1;
-        $perPage = 10;
+        $perPage = $approvalConfig['limits']['select2_per_page'];
 
         $query = \Illuminate\Support\Facades\DB::connection('idempiere')->table('c_bpartner')
             ->where('isactive', 'Y')
@@ -188,15 +190,16 @@ class ApprovalPrController extends Controller
 
     public function getCostCenters(Request $request)
     {
+        $approvalConfig = config('idempiere.approval-pr');
         $clientId = Session::get('idempiere_client');
         $search = $request->term;
         $page = $request->page ?? 1;
-        $perPage = 10;
+        $perPage = $approvalConfig['limits']['select2_per_page'];
 
-        $query = \Illuminate\Support\Facades\DB::connection('idempiere')->table('dpk_cost_center')
+        $query = \Illuminate\Support\Facades\DB::connection('idempiere')->table('c_costcenter')
             ->where('isactive', 'Y')
             ->where('ad_client_id', $clientId)
-            ->select('dpk_cost_center_id as id', 'name as text');
+            ->select('c_costcenter_id as id', 'name as text');
 
         if ($search) {
             $query->where('name', 'ilike', "%{$search}%");
@@ -212,6 +215,8 @@ class ApprovalPrController extends Controller
 
     public function show($id)
     {
+        $approvalConfig = config('idempiere.approval-pr');
+
         // Decrypt ID
         try {
             $decryptedId = Crypt::decryptString($id);
@@ -263,8 +268,8 @@ class ApprovalPrController extends Controller
             ->join('ad_wf_activity as a', 'a.ad_wf_process_id', '=', 'p.ad_wf_process_id')
             ->join('ad_wf_responsible as wr', 'wr.ad_wf_responsible_id', '=', 'a.ad_wf_responsible_id')
             ->where('p.record_id', $requisition->m_requisition_id)
-            ->where('p.ad_table_id', 702) // M_Requisition
-            ->where('a.wfstate', 'OS')
+            ->where('p.ad_table_id', $approvalConfig['workflow']['table_id'])
+            ->where('a.wfstate', $approvalConfig['workflow']['open_state'])
             ->where('a.isactive', 'Y')
             ->where('wr.ad_role_id', $roleId)
             ->exists();
@@ -280,14 +285,22 @@ class ApprovalPrController extends Controller
 
     public function process(Request $request, $id)
     {
+        $approvalConfig = config('idempiere.approval-pr');
+        $workflowConfig = $approvalConfig['workflow'];
+
         try {
             $decryptedId = Crypt::decryptString($id);
         } catch (\Exception $e) {
             $decryptedId = $id;
         }
 
-        $action = $request->input('action');
-        $comment = $request->input('comment');
+        $validated = $request->validate([
+            'action' => 'required|in:' . implode(',', $workflowConfig['allowed_actions']),
+            'comment' => 'nullable|string',
+        ]);
+
+        $action = $validated['action'];
+        $comment = $validated['comment'] ?? null;
 
         // Fetch the AD_WF_Activity_ID for this record and user/role
         $roleId = Session::get('idempiere_role');
@@ -297,8 +310,8 @@ class ApprovalPrController extends Controller
             ->join('ad_wf_activity as a', 'a.ad_wf_process_id', '=', 'p.ad_wf_process_id')
             ->join('ad_wf_responsible as wr', 'wr.ad_wf_responsible_id', '=', 'a.ad_wf_responsible_id')
             ->where('p.record_id', $decryptedId) // M_Requisition_ID
-            ->where('p.ad_table_id', 702)
-            ->where('a.wfstate', 'OS')
+            ->where('p.ad_table_id', $workflowConfig['table_id'])
+            ->where('a.wfstate', $workflowConfig['open_state'])
             ->where('a.isactive', 'Y')
             ->where('wr.ad_role_id', $roleId)
             ->select('a.ad_wf_activity_id')
@@ -307,12 +320,12 @@ class ApprovalPrController extends Controller
         if (!$activity) {
             return response()->json([
                 'success' => false,
-                'message' => 'No active workflow activity found for your role on this document.'
+                'message' => $workflowConfig['no_activity_message']
             ], 404);
         }
 
         $activityId = $activity->ad_wf_activity_id;
-        $endpoint = $action === 'APPROVE' ? "workflow/approve/{$activityId}" : "workflow/reject/{$activityId}";
+        $endpoint = ($workflowConfig['endpoints'][$action] ?? $workflowConfig['endpoints']['REJECT']) . "/{$activityId}";
 
         // Payload
         $payload = [
@@ -332,14 +345,14 @@ class ApprovalPrController extends Controller
                 $userId = $userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? 0;
 
                 // Determine Status Code
-                $statusCode = ($action === 'APPROVE') ? 'AP' : 'RE';
+                $statusCode = $workflowConfig['custom_column_statuses'][$action] ?? null;
                 $now = date('Y-m-d H:i:s');
 
                 // Check Current State to decide Step 1 vs Step 2
                 $req = \Illuminate\Support\Facades\DB::connection('idempiere')
                     ->table('m_requisition')
                     ->where('m_requisition_id', $decryptedId)
-                    ->select('dpk_checked_isapproved', 'dpk_checked_date')
+                    ->select('adw_checked_isapproved', 'adw_checked_date')
                     ->first();
 
                 $updateData = [];
@@ -348,19 +361,19 @@ class ApprovalPrController extends Controller
                 // Note: If Step 1 was rejected, flow likely stops, but if we are here approving, 
                 // it implies we are at the right step? 
                 // Wait, if I am Approver 2, Step 1 should be 'AP'.
-                if (!$req || is_null($req->dpk_checked_date)) {
+                if (!$req || is_null($req->adw_checked_date)) {
                     // Step 1: Checked
                     $updateData = [
-                        'dpk_ad_user_checked_id' => $userId,
-                        'dpk_checked_date' => $now,
-                        'dpk_checked_isapproved' => $statusCode
+                        'adw_ad_user_checked_id' => $userId,
+                        'adw_checked_date' => $now,
+                        'adw_checked_isapproved' => $statusCode
                     ];
                 } else {
                     // Step 2: Approved
                     $updateData = [
-                        'dpk_ad_user_approved_id' => $userId,
-                        'dpk_approved_date' => $now,
-                        'dpk_approve_isapproved' => $statusCode
+                        'adw_ad_user_approved_id' => $userId,
+                        'adw_approved_date' => $now,
+                        'adw_approve_isapproved' => $statusCode
                     ];
                 }
 
@@ -377,7 +390,7 @@ class ApprovalPrController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => $action === 'APPROVE' ? 'Approved successfully.' : 'Rejected successfully.'
+                'message' => $workflowConfig['success_messages'][$action] ?? 'Action completed successfully.'
             ]);
         }
 

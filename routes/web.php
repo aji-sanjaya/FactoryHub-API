@@ -4,13 +4,16 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\WelcomeController;
 
 // authentication pages (PUBLIC)
 Route::get('/signin', [AuthController::class, 'showLoginForm'])->name('signin');
 Route::post('/signin', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::post('/auth/change-role', [AuthController::class, 'changeRole'])->name('auth.change-role');
 Route::get('/auth/roles', [AuthController::class, 'showRoleSelection'])->name('auth.roles');
 Route::post('/auth/roles', [AuthController::class, 'selectRole'])->name('auth.roles.store');
+Route::get('/auth/roles-partial', [AuthController::class, 'showRoleSelectionPartial'])->name('auth.roles.partial');
 Route::get('/auth/api/roles', [AuthController::class, 'getRoles'])->name('auth.api.roles');
 Route::get('/auth/api/orgs', [AuthController::class, 'getOrgs'])->name('auth.api.orgs');
 Route::get('/auth/api/warehouses', [AuthController::class, 'getWarehouses'])->name('auth.api.warehouses');
@@ -22,7 +25,9 @@ Route::get('/signup', function () {
 // PROTECTED ROUTES
 Route::middleware(['auth'])->group(function () {
     // dashboard pages
-    Route::get('/', [\App\Http\Controllers\ProcurementDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/', [WelcomeController::class, 'index'])->name('dashboard');
+    Route::get('/welcome/root/{rootMenuId}', [WelcomeController::class, 'openRootMenu'])->name('dashboard.open-root');
+    Route::get('/procurement-dashboard', [\App\Http\Controllers\ProcurementDashboardController::class, 'index'])->name('procurement-dashboard');
     Route::get('/petty-cash-dashboard', [\App\Http\Controllers\PettyCashDashboardController::class, 'index'])->name('petty-cash-dashboard');
     Route::get('/petty-cash-dashboard/export', [\App\Http\Controllers\PettyCashDashboardController::class, 'export'])->name('petty-cash-dashboard.export');
     Route::get('/sales-dashboard', [\App\Http\Controllers\SalesDashboardController::class, 'index'])->name('sales-dashboard');
@@ -125,6 +130,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/customer-shipment/api/warehouses', [\App\Http\Controllers\CustomerShipmentController::class, 'getWarehouses'])->name('customer-shipment.api.warehouses');
     Route::get('/customer-shipment/api/products', [\App\Http\Controllers\CustomerShipmentController::class, 'getProducts'])->name('customer-shipment.api.products');
     Route::get('/customer-shipment/api/bpartner-locations', [\App\Http\Controllers\CustomerShipmentController::class, 'getBPartnerLocations'])->name('customer-shipment.api.bpartner-locations');
+    Route::get('/customer-shipment/api/so-documents', [\App\Http\Controllers\CustomerShipmentController::class, 'getSODocuments'])->name('customer-shipment.api.so-documents');
     Route::get('/customer-shipment/api/so-lines', [\App\Http\Controllers\CustomerShipmentController::class, 'getSOLines'])->name('customer-shipment.api.so-lines');
 
     // Customer Shipment Lines
@@ -185,6 +191,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/create-po/api/product-price', [\App\Http\Controllers\PurchaseOrderController::class, 'getProductPrice'])->name('purchase-order.api.product-price');
     Route::get('/create-po/api/warehouses', [\App\Http\Controllers\PurchaseOrderController::class, 'getWarehouses'])->name('purchase-order.api.warehouses');
     Route::get('/create-po/api/requisition-lines', [\App\Http\Controllers\PurchaseOrderController::class, 'getRequisitionLines'])->name('purchase-order.api.requisition-lines');
+    Route::get('/create-po/api/withholding-types', [\App\Http\Controllers\PurchaseOrderController::class, 'getWithholdingTypes'])->name('purchase-order.api.withholding-types');
 
     // PO Lines
     Route::post('/create-po/line/store', [\App\Http\Controllers\PurchaseOrderController::class, 'storeLine'])->name('purchase-order.line.store');

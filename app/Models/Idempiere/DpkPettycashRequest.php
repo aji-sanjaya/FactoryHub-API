@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class DpkPettycashRequest extends Model
 {
     protected $connection = 'idempiere';
-    protected $table = 'dpk_pettycash_request';
-    protected $primaryKey = 'dpk_pettycash_request_id';
+    protected $table = 'adw_pettycash_request';
+    protected $primaryKey = 'adw_pettycash_request_id';
     public $timestamps = false;
 
     protected $fillable = [
@@ -32,7 +32,7 @@ class DpkPettycashRequest extends Model
         'processing',
         'posted',
         'totallines',
-        'dpk_cost_center_id',
+        'c_costcenter_id',
         'created',
         'createdby',
         'updated',
@@ -53,7 +53,7 @@ class DpkPettycashRequest extends Model
      */
     public function lines()
     {
-        return $this->hasMany(DpkPettycashRequestLine::class, 'dpk_pettycash_request_id', 'dpk_pettycash_request_id')
+        return $this->hasMany(DpkPettycashRequestLine::class, 'adw_pettycash_request_id', 'adw_pettycash_request_id')
             ->where('isactive', 'Y')
             ->orderBy('line');
     }

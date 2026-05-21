@@ -3,6 +3,7 @@
 @section('content')
 
     @php 
+        $customerShipmentConfig = config('idempiere.customer-shipment');
         $isNew = is_null($shipment);
         // Read active tab from URL param, default to 'header'
         $activeTab = in_array(request('tab'), ['header', 'lines', 'attachments']) ? request('tab') : 'header';
@@ -43,7 +44,7 @@
         // Read Only Logic
         $isReadOnly = false;
         if (!$isNew && isset($shipment->docstatus)) {
-            $isReadOnly = in_array($shipment->docstatus, ['CO', 'CL', 'VO', 'RE']);
+            $isReadOnly = in_array($shipment->docstatus, $customerShipmentConfig['statuses']['read_only']);
         }
     @endphp
 
@@ -77,7 +78,7 @@
 
             <div class="flex gap-3">
                 <!-- Always Visible Action (Print) -->
-                @if(isset($shipment) && in_array($shipment->docstatus, ['IP', 'CO']))
+                @if(isset($shipment) && in_array($shipment->docstatus, $customerShipmentConfig['statuses']['printable']))
                     <button type="button"
                         onclick="openPrintModal('{{ route('customer-shipment.print', \Illuminate\Support\Facades\Crypt::encryptString($shipment->m_inout_id)) }}')"
                         class="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-4 focus:ring-gray-200 shadow-sm transition-all gap-2 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -274,22 +275,33 @@
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
         <script>
+            const shipperDeliveryViaRule = @json($customerShipmentConfig['rules']['shipper_delivery_via']);
+
             // Initialization Function to be called on ready and after AJAX
             function initScripts() {
                 // Init Select2 on All Header Dropdowns (removed pricelist_id and c_tax_id)
-                $('#org_id, #warehouse_id, #c_bpartner_id, #c_bpartner_location_id, #bill_bpartner_id, #bill_location_id, #c_doctype_id, #deliveryviarule, #freightcostrule, #m_shipper_id').select2({
+                $('#org_id, #warehouse_id, #c_bpartner_id, #c_bpartner_location_id, #bill_bpartner_id, #bill_location_id, #c_doctype_id, #deliveryviarule, #freightcostrule, #m_shipper_id, #a_asset_id, #salesrep_id').select2({
                     width: '100%',
                     placeholder: '- Select -'
                 });
 
-                // Delivery Via change → show/hide Shipper
+                // Delivery Via change → show/hide Shipper & toggle Asset/Driver
                 $('#deliveryviarule').off('change.shipperToggle').on('change.shipperToggle', function() {
-                    const row = document.getElementById('shipper_row');
-                    if ($(this).val() === 'S') {
-                        row.style.display = '';
+                    const isShipper = $(this).val() === shipperDeliveryViaRule;
+                    const shipperRow = document.getElementById('shipper_row');
+                    const assetRow = document.getElementById('asset_row');
+                    const driverRow = document.getElementById('driver_row');
+                    if (isShipper) {
+                        shipperRow.style.display = '';
+                        assetRow.style.display = 'none';
+                        driverRow.style.display = 'none';
+                        $('#a_asset_id').val('').trigger('change');
+                        $('#salesrep_id').val('').trigger('change');
                     } else {
-                        row.style.display = 'none';
+                        shipperRow.style.display = 'none';
                         $('#m_shipper_id').val('').trigger('change');
+                        assetRow.style.display = '';
+                        driverRow.style.display = '';
                     }
                 });
 
@@ -939,7 +951,9 @@
                     c_doctype_id: $('#c_doctype_id').val(),
                     deliveryviarule: $('#deliveryviarule').val(),
                     freightcostrule: $('#freightcostrule').val(),
-                    m_shipper_id: $('#deliveryviarule').val() === 'S' ? ($('#m_shipper_id').val() || null) : null,
+                    m_shipper_id: $('#deliveryviarule').val() === shipperDeliveryViaRule ? ($('#m_shipper_id').val() || null) : null,
+                    a_asset_id: $('#a_asset_id').val() || null,
+                    salesrep_id: $('#salesrep_id').val() || null,
                 };
 
                 if (!data.movement_date) {

@@ -23,6 +23,8 @@ class SalesOrderController extends Controller
      */
     public function index()
     {
+        $salesOrderConfig = config('idempiere.sales-order');
+
         // 1. Check Authentication / Session Context
         if (!\Illuminate\Support\Facades\Session::has('api_token')) {
             return redirect()->route('signin');
@@ -98,9 +100,9 @@ class SalesOrderController extends Controller
             $pricelists = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
                 SELECT pl.m_pricelist_id AS id, pl.name AS text
                 FROM m_pricelist pl
-                WHERE pl.isactive = 'Y' AND pl.ad_client_id = ? AND pl.issopricelist = 'Y'
+                WHERE pl.isactive = 'Y' AND pl.ad_client_id = ? AND pl.issopricelist = ?
                 ORDER BY pl.name
-            ", [$clientId]);
+            ", [$clientId, $salesOrderConfig['filters']['is_sales_price_list']]);
 
             // Fetch Users for Checked/Approved By
             $users = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
@@ -115,9 +117,9 @@ class SalesOrderController extends Controller
             $bpartners = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
                 SELECT c_bpartner_id AS id, name AS text
                 FROM c_bpartner
-                WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer = 'Y'
+                WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer = ?
                 ORDER BY name
-            ", [$clientId]);
+            ", [$clientId, $salesOrderConfig['filters']['is_customer']]);
 
             // Fetch Client Name
             $client = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_client')
@@ -134,14 +136,17 @@ class SalesOrderController extends Controller
             ", [$clientId]);
 
             // Fetch Lines if Editing (Paginated)
-            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
+            $defaultLinePerPage = $salesOrderConfig['limits']['line_default_per_page'];
+            $linePerPageOptions = $salesOrderConfig['limits']['line_per_page_options'];
+
+            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $defaultLinePerPage);
             if ($salesOrder) {
                 // Get Current Page and Per Page
                 $page = request()->get('lines_page', 1);
-                $perPage = request()->get('per_page', 10);
+                $perPage = (int) request()->get('per_page', $defaultLinePerPage);
                 // Validate per_page
-                if (!in_array($perPage, [10, 25, 50, 100])) {
-                    $perPage = 10;
+                if (!in_array($perPage, $linePerPageOptions, true)) {
+                    $perPage = $defaultLinePerPage;
                 }
 
                 // Base Query
@@ -196,19 +201,20 @@ class SalesOrderController extends Controller
                 'bpartners' => $bpartners,
                 'documentIdParam' => $docId,
                 'docNo' => isset($salesOrder) ? $salesOrder->documentno : '** New **',
-                'status' => isset($salesOrder) ? $salesOrder->status_label : 'Drafted',
+                'status' => isset($salesOrder) ? $salesOrder->status_label : $salesOrderConfig['defaults']['document_status_label'],
                 'desc' => isset($salesOrder) ? $salesOrder->description : '',
                 'currentOrgId' => isset($salesOrder) ? $salesOrder->ad_org_id : null,
                 'isNew' => is_null($salesOrder),
                 'docIdParam' => request('document_id'),
-                'isReadOnly' => isset($salesOrder) && in_array($salesOrder->docstatus, ['CO', 'CL', 'VO', 'RE']),
+                'isReadOnly' => isset($salesOrder) && in_array($salesOrder->docstatus, $salesOrderConfig['statuses']['read_only'], true),
                 'taxes' => $taxes,
+                'salesOrderConfig' => $salesOrderConfig,
                 'priceListPrecision' => isset($salesOrder) && $salesOrder->m_pricelist_id
                     ? (int) (\Illuminate\Support\Facades\DB::connection('idempiere')
                         ->table('m_pricelist')
                         ->where('m_pricelist_id', $salesOrder->m_pricelist_id)
-                        ->value('priceprecision') ?? 2)
-                    : 2,
+                        ->value('priceprecision') ?? $salesOrderConfig['defaults']['price_precision'])
+                    : $salesOrderConfig['defaults']['price_precision'],
             ];
 
             // AJAX Partial Rendering
@@ -250,7 +256,7 @@ class SalesOrderController extends Controller
         $orgId = \Illuminate\Support\Facades\Session::get('idempiere_org');
 
         // 2. Base Query
-        $query = \App\Models\Idempiere\COrder::query()->where('issotrx', 'Y');
+        $query = \App\Models\Idempiere\COrder::query()->where('issotrx', $salesOrderConfig['defaults']['is_so_trx']);
 
         if ($clientId) {
             $query->where('ad_client_id', $clientId);
@@ -268,15 +274,15 @@ class SalesOrderController extends Controller
         $statsQuery->whereBetween('dateordered', [$startOfMonth, $endOfMonth]);
 
         $countCompleted = (clone $statsQuery)
-            ->whereIn('docstatus', ['CO', 'CL'])
+            ->whereIn('docstatus', $salesOrderConfig['statuses']['completed'])
             ->count();
 
         $countDraft = (clone $statsQuery)
-            ->whereIn('docstatus', ['DR', 'IN'])
+            ->whereIn('docstatus', $salesOrderConfig['statuses']['draft'])
             ->count();
 
         $countInProgress = (clone $statsQuery)
-            ->where('docstatus', 'IP')
+            ->where('docstatus', $salesOrderConfig['statuses']['in_progress'])
             ->count();
 
         $countAll = $statsQuery->count();
@@ -305,7 +311,7 @@ class SalesOrderController extends Controller
         // 5. Fetch List Data (Paginated)
         $salesOrders = $query->orderBy('dateordered', 'desc')
             ->orderBy('created', 'desc')
-            ->paginate(10)
+            ->paginate($salesOrderConfig['limits']['list_per_page'])
             ->withQueryString();
 
         if (request()->ajax()) {
@@ -373,6 +379,8 @@ class SalesOrderController extends Controller
 
     public function store(Request $request)
     {
+        $salesOrderConfig = config('idempiere.sales-order');
+
         // 1. Validate Form Input
         $validated = $request->validate([
             'org_id' => 'required',
@@ -428,10 +436,10 @@ class SalesOrderController extends Controller
             'DateOrdered' => $dateOrdered,
             'AD_User_ID' => (int) $sessionUserId,
             'C_BPartner_ID' => (int) $validated['c_bpartner_id'],
-            'IsSOTrx' => true,
+            'IsSOTrx' => $salesOrderConfig['defaults']['is_so_trx'] === 'Y',
             'IsActive' => true,
             'POReference' => $validated['order_reference'] ?? null,
-            'C_DocTypeTarget_ID' => !empty($validated['c_doctypetarget_id']) ? (int) $validated['c_doctypetarget_id'] : 1000032,
+            'C_DocTypeTarget_ID' => !empty($validated['c_doctypetarget_id']) ? (int) $validated['c_doctypetarget_id'] : $salesOrderConfig['doc_types']['target'],
             'C_Tax_ID' => !empty($validated['c_tax_id']) ? (int) $validated['c_tax_id'] : null,
         ];
 
@@ -557,9 +565,10 @@ class SalesOrderController extends Controller
     }
     public function getProducts(Request $request)
     {
+        $salesOrderConfig = config('idempiere.sales-order');
         $search = $request->get('q');
         $page = $request->get('page', 1);
-        $perPage = 25;
+        $perPage = $salesOrderConfig['limits']['products_per_page'];
 
         // Get Client ID from session
         $clientId = \Illuminate\Support\Facades\Session::get('idempiere_client');
@@ -587,7 +596,7 @@ class SalesOrderController extends Controller
             ->where('p.ad_client_id', $clientId); // Filter by client
 
         // Only sold products, not purchased (finished goods for sale)
-        $query->where('p.issold', 'Y');
+        $query->where('p.issold', $salesOrderConfig['filters']['is_sold']);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -623,6 +632,8 @@ class SalesOrderController extends Controller
 
     public function getProductPrice(Request $request)
     {
+        $salesOrderConfig = config('idempiere.sales-order');
+
         $productId = $request->get('product_id');
         $priceListId = $request->get('pricelist_id');
 
@@ -655,15 +666,19 @@ class SalesOrderController extends Controller
 
         return response()->json([
             'price' => $price,
-            'price_precision' => (int) ($pricePrecision ?? 2),
+            'price_precision' => (int) ($pricePrecision ?? $salesOrderConfig['defaults']['price_precision']),
         ]);
     }
 
     public function process(Request $request)
     {
+        $salesOrderConfig = config('idempiere.sales-order');
+        $allowedActions = $salesOrderConfig['workflow']['allowed_actions'];
+        $reactivateAction = $salesOrderConfig['workflow']['reactivate_action'];
+
         $validated = $request->validate([
             'document_id' => 'required',
-            'doc_action' => 'required|in:CO,PR,VO,CL,RE',
+            'doc_action' => 'required|in:' . implode(',', $allowedActions),
         ]);
 
         try {
@@ -683,7 +698,7 @@ class SalesOrderController extends Controller
 
             if ($response->successful()) {
                 // Custom Logic for Re-Active Action - Execute AFTER successful doc-action
-                if ($validated['doc_action'] === 'RE') {
+                if ($validated['doc_action'] === $reactivateAction) {
                     // Get all order lines with qtydelivered information
                     $orderLines = \Illuminate\Support\Facades\DB::connection('idempiere')
                         ->table('c_orderline')

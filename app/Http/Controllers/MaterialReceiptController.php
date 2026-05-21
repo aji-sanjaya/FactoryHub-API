@@ -24,6 +24,8 @@ class MaterialReceiptController extends Controller
 
     public function index()
     {
+        $materialReceiptConfig = config('idempiere.create-gr');
+
         if (!Session::has('api_token')) {
             return redirect()->route('signin');
         }
@@ -32,7 +34,7 @@ class MaterialReceiptController extends Controller
             return $this->showForm(request('document_id'));
         }
 
-        $perPage = request()->get('per_page', 10);
+        $perPage = (int) request()->get('per_page', $materialReceiptConfig['limits']['list_per_page']);
         $page = request()->get('page', 1);
         $status = request()->get('status', 'all');
         $search = request()->get('search', '');
@@ -40,8 +42,8 @@ class MaterialReceiptController extends Controller
         $clientId = Session::get('idempiere_client');
 
         $query = MInOut::where('ad_client_id', $clientId)
-            ->where('movementtype', 'V+')
-            ->where('issotrx', 'N')
+            ->where('movementtype', $materialReceiptConfig['defaults']['movement_type'])
+            ->where('issotrx', $materialReceiptConfig['defaults']['is_so_trx'])
             ->where('isactive', 'Y');
 
         if ($status !== 'all') {
@@ -54,10 +56,10 @@ class MaterialReceiptController extends Controller
         $query->orderBy('created', 'desc');
         $receipts = $query->paginate($perPage);
 
-        $countAll = MInOut::where('ad_client_id', $clientId)->where('movementtype', 'V+')->where('issotrx', 'N')->where('isactive', 'Y')->count();
-        $countDraft = MInOut::where('ad_client_id', $clientId)->where('movementtype', 'V+')->where('issotrx', 'N')->where('isactive', 'Y')->where('docstatus', 'DR')->count();
-        $countInProgress = MInOut::where('ad_client_id', $clientId)->where('movementtype', 'V+')->where('issotrx', 'N')->where('isactive', 'Y')->where('docstatus', 'IP')->count();
-        $countCompleted = MInOut::where('ad_client_id', $clientId)->where('movementtype', 'V+')->where('issotrx', 'N')->where('isactive', 'Y')->whereIn('docstatus', ['CO', 'CL'])->count();
+        $countAll = MInOut::where('ad_client_id', $clientId)->where('movementtype', $materialReceiptConfig['defaults']['movement_type'])->where('issotrx', $materialReceiptConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->count();
+        $countDraft = MInOut::where('ad_client_id', $clientId)->where('movementtype', $materialReceiptConfig['defaults']['movement_type'])->where('issotrx', $materialReceiptConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->whereIn('docstatus', $materialReceiptConfig['statuses']['draft'])->count();
+        $countInProgress = MInOut::where('ad_client_id', $clientId)->where('movementtype', $materialReceiptConfig['defaults']['movement_type'])->where('issotrx', $materialReceiptConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->whereIn('docstatus', $materialReceiptConfig['statuses']['in_progress'])->count();
+        $countCompleted = MInOut::where('ad_client_id', $clientId)->where('movementtype', $materialReceiptConfig['defaults']['movement_type'])->where('issotrx', $materialReceiptConfig['defaults']['is_so_trx'])->where('isactive', 'Y')->whereIn('docstatus', $materialReceiptConfig['statuses']['completed'])->count();
 
         if (request()->ajax()) {
             return response()->json([
@@ -79,6 +81,8 @@ class MaterialReceiptController extends Controller
 
     private function showForm($docId)
     {
+        $materialReceiptConfig = config('idempiere.create-gr');
+
         $receipt = null;
         if ($docId !== 'new') {
             try {
@@ -123,7 +127,7 @@ class MaterialReceiptController extends Controller
             SELECT c_bpartner_id AS id, name AS text
             FROM c_bpartner
             WHERE isactive = 'Y' AND ad_client_id = ? AND isvendor='Y'
-            ORDER BY name LIMIT 200
+            ORDER BY name LIMIT {$materialReceiptConfig['limits']['vendor_search']}
         ", [$clientId]);
 
         // DocTypes for Material Receipt (MMR = Material Movement Receipt)
@@ -131,11 +135,15 @@ class MaterialReceiptController extends Controller
             SELECT dt.c_doctype_id AS id, dt.name AS text
             FROM c_doctype dt
             WHERE dt.isactive = 'Y'
-            AND dt.docbasetype = 'MMR'
+            AND dt.docbasetype = ?
             AND dt.ad_client_id = ?
             AND dt.ad_org_id IN (0, ?)
             ORDER BY dt.c_doctype_id DESC
-        ", [$clientId, $clientId]);
+        ", [
+            $materialReceiptConfig['doc_types']['base_type'],
+            $clientId,
+            $clientId,
+        ]);
 
         // Projects
         $projects = DB::connection('idempiere')->select("
@@ -147,6 +155,8 @@ class MaterialReceiptController extends Controller
 
         // Lines
         if ($receipt) {
+            $linePerPage = $materialReceiptConfig['limits']['line_default_per_page'];
+
             $lines = DB::connection('idempiere')
                 ->table('m_inoutline as il')
                 ->leftJoin('m_product as p', 'il.m_product_id', '=', 'p.m_product_id')
@@ -169,12 +179,12 @@ class MaterialReceiptController extends Controller
                     'ol.line as po_line'
                 )
                 ->orderBy('il.line')
-                ->paginate(10);
+                ->paginate($linePerPage);
         } else {
-            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
+            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $materialReceiptConfig['limits']['line_default_per_page']);
         }
 
-        $statusLabel = $receipt ? $this->getStatusLabel($receipt->docstatus) : 'Draft';
+        $statusLabel = $receipt ? $this->getStatusLabel($receipt->docstatus) : $materialReceiptConfig['defaults']['document_status_label'];
 
         // Check Active Workflow
         $hasActiveWorkflow = false;
@@ -182,7 +192,7 @@ class MaterialReceiptController extends Controller
             $hasActiveWorkflow = DB::connection('idempiere')
                 ->table('ad_wf_activity')
                 ->join('ad_table', 'ad_table.ad_table_id', '=', 'ad_wf_activity.ad_table_id')
-                ->where('ad_table.tablename', 'M_InOut')
+                ->where('ad_table.tablename', $materialReceiptConfig['workflow']['table_name'])
                 ->where('ad_wf_activity.record_id', $receipt->m_inout_id)
                 ->where('ad_wf_activity.processed', 'N')
                 ->exists();
@@ -208,10 +218,11 @@ class MaterialReceiptController extends Controller
                 ? \Illuminate\Support\Carbon::parse($receipt->dateacct)->format('Y-m-d')
                 : date('Y-m-d'),
             'docIdParam' => request('document_id'),
-            'isReadOnly' => $receipt && in_array($receipt->docstatus, ['CO', 'CL', 'VO', 'RE']),
+            'isReadOnly' => $receipt && in_array($receipt->docstatus, $materialReceiptConfig['statuses']['read_only'], true),
             'isDraft' => $receipt && $receipt->docstatus === 'DR',
             'activeTab' => request('tab', 'header'),
             'hasActiveWorkflow' => $hasActiveWorkflow,
+            'materialReceiptConfig' => $materialReceiptConfig,
         ];
 
         // docTypeId
@@ -266,10 +277,10 @@ class MaterialReceiptController extends Controller
                             DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                             DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                         )
-                        ->where('fa.ad_table_id', 319) // 319 is M_InOut
+                        ->where('fa.ad_table_id', $materialReceiptConfig['journals']['table_id'])
                         ->where('fa.record_id', $receipt->m_inout_id)
                         ->orderBy('fa.fact_acct_id')
-                        ->paginate(10)
+                        ->paginate($materialReceiptConfig['limits']['journals_per_page'])
                         ->appends(['ajax_tab' => 'journals']);
                 }
                 $viewData['journals'] = $journals;
@@ -322,18 +333,23 @@ class MaterialReceiptController extends Controller
             ->orderBy('il.line')
             ->get();
 
-        // Vendor name
+        // Vendor name + code
         $vendorName = '-';
+        $vendorCode = '-';
         if ($receipt->c_bpartner_id) {
             $vendor = DB::connection('idempiere')
                 ->table('c_bpartner')
                 ->where('c_bpartner_id', $receipt->c_bpartner_id)
-                ->select('name')
+                ->select('name', 'value')
                 ->first();
             if ($vendor) {
                 $vendorName = $vendor->name;
+                $vendorCode = $vendor->value;
             }
         }
+
+        // Supplier DN No. (poreference)
+        $supplierDNNo = $receipt->poreference ?? '-';
 
         // Warehouse name + address
         $warehouseName = '-';
@@ -376,6 +392,29 @@ class MaterialReceiptController extends Controller
             }
         }
 
+        // Client Name
+        $clientName = DB::connection('idempiere')
+            ->table('ad_client')
+            ->where('ad_client_id', $receipt->ad_client_id)
+            ->value('name');
+
+        // Org address via c_bpartner → c_bpartner_location → c_location
+        $orgInfo = null;
+        try {
+            $orgInfo = DB::connection('idempiere')
+                ->table('c_bpartner as bp')
+                ->leftJoin('c_bpartner_location as bpl', function ($join) {
+                    $join->on('bp.c_bpartner_id', '=', 'bpl.c_bpartner_id')
+                         ->where('bpl.isactive', '=', 'Y');
+                })
+                ->leftJoin('c_location as locbp', 'bpl.c_location_id', '=', 'locbp.c_location_id')
+                ->where('bp.c_bpartner_id', config('idempiere.client_id'))
+                ->select('locbp.address1', 'locbp.address2', 'locbp.address3', 'locbp.city', 'locbp.postal')
+                ->first();
+        } catch (\Exception $e) {
+            // non-fatal
+        }
+
         // Logo (iDempiere DB → fallback to local file)
         $logoBase64 = null;
         try {
@@ -411,7 +450,11 @@ class MaterialReceiptController extends Controller
         $pdf = Pdf::loadView('pages.material-receipt.print', [
             'receipt' => $receipt,
             'lines' => $lines,
+            'clientName' => $clientName,
+            'orgInfo' => $orgInfo,
             'vendorName' => $vendorName,
+            'vendorCode' => $vendorCode,
+            'supplierDNNo' => $supplierDNNo,
             'warehouseName' => $warehouseName,
             'warehouseAddress' => $warehouseAddress,
             'receivedByName' => $receivedByName,
@@ -427,6 +470,8 @@ class MaterialReceiptController extends Controller
 
     public function store(Request $request)
     {
+        $materialReceiptConfig = config('idempiere.create-gr');
+
         $validated = $request->validate([
             'org_id' => 'required',
             'warehouse_id' => 'required',
@@ -470,8 +515,8 @@ class MaterialReceiptController extends Controller
             'C_DocType_ID' => (int) $validated['doc_type_id'],
             'MovementDate' => $validated['movement_date'],
             'DateAcct' => $validated['date_acct'] ?? $validated['movement_date'],
-            'MovementType' => 'V+',
-            'IsSOTrx' => 'N',
+            'MovementType' => $materialReceiptConfig['defaults']['movement_type'],
+            'IsSOTrx' => $materialReceiptConfig['defaults']['is_so_trx'],
             'C_BPartner_ID' => $bpartnerId,
             'Description' => $validated['description'] ?? null,
             'SalesRep_ID' => (int) $sessionUserId,
@@ -709,9 +754,11 @@ class MaterialReceiptController extends Controller
 
     public function process(Request $request)
     {
+        $materialReceiptConfig = config('idempiere.create-gr');
+
         $validated = $request->validate([
             'document_id' => 'required',
-            'doc_action' => 'required|in:CO,PR,VO,CL,RC',
+            'doc_action' => 'required|in:' . implode(',', $materialReceiptConfig['workflow']['allowed_actions']),
         ]);
 
         try {
@@ -880,9 +927,10 @@ class MaterialReceiptController extends Controller
     // API: Get Products
     public function getProducts(Request $request)
     {
+        $materialReceiptConfig = config('idempiere.create-gr');
         $search = $request->get('q');
         $page = $request->get('page', 1);
-        $perPage = 25;
+        $perPage = $materialReceiptConfig['limits']['products_per_page'];
         $clientId = Session::get('idempiere_client');
 
         if (!$clientId)
@@ -920,10 +968,11 @@ class MaterialReceiptController extends Controller
     // API: Get PO Lines for linking (from completed/in-progress POs)
     public function getPoLines(Request $request)
     {
+        $materialReceiptConfig = config('idempiere.create-gr');
         $clientId = Session::get('idempiere_client');
         $search = $request->get('q', '');
         $page = $request->get('page', 1);
-        $perPage = 100;
+        $perPage = $materialReceiptConfig['limits']['po_modal'];
 
         $query = DB::connection('idempiere')
             ->table('c_orderline as ol')
@@ -931,8 +980,8 @@ class MaterialReceiptController extends Controller
             ->join('m_product as p', 'p.m_product_id', '=', 'ol.m_product_id')
             ->leftJoin('c_bpartner as bp', 'bp.c_bpartner_id', '=', 'o.c_bpartner_id')
             ->leftJoin('c_uom as u', 'ol.c_uom_id', '=', 'u.c_uom_id')
-            ->whereIn('o.docstatus', ['CO', 'IP'])
-            ->where('o.issotrx', 'N')
+            ->whereIn('o.docstatus', $materialReceiptConfig['purchase_order']['doc_statuses'])
+            ->where('o.issotrx', $materialReceiptConfig['purchase_order']['is_so_trx'])
             ->where('ol.ad_client_id', $clientId)
             ->select(
                 'ol.c_orderline_id',
@@ -1011,6 +1060,7 @@ class MaterialReceiptController extends Controller
     public function exportJournals($id)
     {
         try {
+            $materialReceiptConfig = config('idempiere.create-gr');
             $decryptedId = Crypt::decryptString($id);
             $receipt = MInOut::findOrFail($decryptedId);
 
@@ -1023,7 +1073,7 @@ class MaterialReceiptController extends Controller
                     DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                     DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                 )
-                ->where('fa.ad_table_id', 319) // 319 is M_InOut
+                ->where('fa.ad_table_id', $materialReceiptConfig['journals']['table_id'])
                 ->where('fa.record_id', $receipt->m_inout_id)
                 ->orderBy('fa.fact_acct_id')
                 ->get();
@@ -1081,17 +1131,8 @@ class MaterialReceiptController extends Controller
 
     private function getStatusLabel(?string $status): string
     {
-        return match ($status) {
-            'DR' => 'Draft',
-            'IP' => 'In Progress',
-            'CO' => 'Completed',
-            'CL' => 'Closed',
-            'VO' => 'Voided',
-            'RE' => 'Reversed',
-            'AP' => 'Approved',
-            'NA' => 'Not Approved',
-            'IN' => 'Invalid',
-            default => $status ?? 'Unknown',
-        };
+        $statusLabels = config('idempiere.create-gr.statuses.labels', []);
+
+        return $statusLabels[$status] ?? ($status ?? 'Unknown');
     }
 }

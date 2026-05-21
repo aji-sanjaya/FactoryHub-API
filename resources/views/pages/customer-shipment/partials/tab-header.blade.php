@@ -1,4 +1,5 @@
 @php
+    $customerShipmentConfig = config('idempiere.customer-shipment');
     $currentBPartnerId = $shipment->c_bpartner_id ?? null;
     $currentBPartnerLocationId = $shipment->c_bpartner_location_id ?? null;
 
@@ -27,23 +28,24 @@
     $shipmentReference = $shipment->poreference ?? '';
 
     // Delivery Via / Freight / Shipper
-    $deliveryViaRule = $shipment->deliveryviarule ?? 'D';
-    $freightCostRule = $shipment->freightcostrule ?? 'I';
+    $deliveryViaRule = $shipment->deliveryviarule ?? $customerShipmentConfig['defaults']['delivery_via_rule'];
+    $freightCostRule = $shipment->freightcostrule ?? $customerShipmentConfig['defaults']['freight_cost_rule'];
     $currentShipperId = $shipment->m_shipper_id ?? null;
+    $shipperDeliveryViaRule = $customerShipmentConfig['rules']['shipper_delivery_via'];
 
     $deliveryViaOptions = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
         SELECT rl.value AS id, rl.name AS text
         FROM ad_ref_list rl
-        WHERE rl.ad_reference_id = 152 AND rl.isactive = 'Y'
+        WHERE rl.ad_reference_id = ? AND rl.isactive = 'Y'
         ORDER BY rl.name
-    ");
+    ", [$customerShipmentConfig['references']['delivery_via_rule']]);
 
     $freightCostOptions = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
         SELECT rl.value AS id, rl.name AS text
         FROM ad_ref_list rl
-        WHERE rl.ad_reference_id = 153 AND rl.isactive = 'Y'
+        WHERE rl.ad_reference_id = ? AND rl.isactive = 'Y'
         ORDER BY rl.name
-    ");
+    ", [$customerShipmentConfig['references']['freight_cost_rule']]);
 
     $clientIdForShipper = \Illuminate\Support\Facades\Session::get('idempiere_client');
     $shippers = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
@@ -69,6 +71,27 @@
     // Checked By and Approved By users
     $checkedById = $shipment->salesrep_id ?? null;
     $approvedById = $shipment->ad_user_id ?? null;
+
+    // Driver Name (maps to SalesRep_ID on M_InOut)
+    $currentDriverId = $shipment->salesrep_id ?? null;
+    $driverRoleId = config('idempiere.roles.driver');
+    $drivers = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
+        SELECT DISTINCT u.ad_user_id AS id, u.name AS text
+        FROM ad_user u
+        JOIN ad_user_roles ur ON u.ad_user_id = ur.ad_user_id
+        WHERE ur.ad_role_id = ? AND u.isactive = 'Y'
+        ORDER BY u.name
+    ", [$driverRoleId]);
+
+    // A_Asset
+    $currentAssetId = $shipment->a_asset_id ?? null;
+    $clientIdForAsset = \Illuminate\Support\Facades\Session::get('idempiere_client');
+    $assets = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
+        SELECT a_asset_id AS id, value AS text
+        FROM a_asset
+        WHERE isactive = 'Y' AND ad_client_id = ?
+        ORDER BY value
+    ", [$clientIdForAsset]);
 @endphp
 
 <style>
@@ -168,11 +191,13 @@
                     <label class="text-right text-sm font-medium text-gray-600 dark:text-gray-400">Document Type <span class="text-red-500">*</span></label>
                     <div class="col-span-2">
                         @php
-                            $currentDocTypeId = $isNew ? 1000011 : ($shipment->c_doctype_id ?? 1000011);
+                            $currentDocTypeId = $isNew
+                                ? $customerShipmentConfig['doc_types']['shipment']
+                                : ($shipment->c_doctype_id ?? $customerShipmentConfig['doc_types']['shipment']);
                         @endphp
                         <select id="c_doctype_id" {{ $isReadOnly ? 'disabled' : '' }}
                             class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
-                            <option value="1000011" {{ $currentDocTypeId == 1000011 ? 'selected' : '' }}>Shipment</option> 
+                            <option value="{{ $customerShipmentConfig['doc_types']['shipment'] }}" {{ $currentDocTypeId == $customerShipmentConfig['doc_types']['shipment'] ? 'selected' : '' }}>Shipment</option> 
                         </select>
                     </div>
                 </div> 
@@ -231,7 +256,7 @@
                         <input type="text" value="{{ $status }}" readonly
                             class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300">
                     </div>
-                </div>
+                </div> 
 
             </div>
         </div>{{-- end grid --}}
@@ -263,8 +288,22 @@
                     </div>
                 </div>
 
+                {{-- A Asset --}}
+                <div id="asset_row" class="grid grid-cols-3 items-center gap-3" style="{{ $deliveryViaRule === $shipperDeliveryViaRule ? 'display:none' : '' }}">
+                    <label class="text-right text-sm font-medium text-gray-600 dark:text-gray-400">Unit</label>
+                    <div class="col-span-2">
+                        <select id="a_asset_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                            <option value="">- Select Asset -</option>
+                            @foreach($assets as $asset)
+                                <option value="{{ $asset->id }}" {{ $currentAssetId == $asset->id ? 'selected' : '' }}>{{ $asset->text }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
                 {{-- Shipper (conditional, shown when Delivery Via = S) --}}
-                <div id="shipper_row" class="grid grid-cols-3 items-center gap-3" style="{{ $deliveryViaRule !== 'S' ? 'display:none' : '' }}">
+                <div id="shipper_row" class="grid grid-cols-3 items-center gap-3" style="{{ $deliveryViaRule !== $shipperDeliveryViaRule ? 'display:none' : '' }}">
                     <label class="text-right text-sm font-medium text-gray-600 dark:text-gray-400">Shipper <span class="text-red-500">*</span></label>
                     <div class="col-span-2">
                         <select id="m_shipper_id" {{ $isReadOnly ? 'disabled' : '' }}
@@ -276,6 +315,7 @@
                         </select>
                     </div>
                 </div>
+
 
             </div>
 
@@ -291,6 +331,20 @@
                             <option value="">- Select -</option>
                             @foreach($freightCostOptions as $fc)
                                 <option value="{{ $fc->id }}" {{ $freightCostRule == $fc->id ? 'selected' : '' }}>{{ $fc->text }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                {{-- Driver Name (SalesRep_ID) --}}
+                <div id="driver_row" class="grid grid-cols-3 items-center gap-3" style="{{ $deliveryViaRule === $shipperDeliveryViaRule ? 'display:none' : '' }}">
+                    <label class="text-right text-sm font-medium text-gray-600 dark:text-gray-400">Driver Name</label>
+                    <div class="col-span-2">
+                        <select id="salesrep_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                            <option value="">- Select Driver -</option>
+                            @foreach($drivers as $driver)
+                                <option value="{{ $driver->id }}" {{ $currentDriverId == $driver->id ? 'selected' : '' }}>{{ $driver->text }}</option>
                             @endforeach
                         </select>
                     </div>

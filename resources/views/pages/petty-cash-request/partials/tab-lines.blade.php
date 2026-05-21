@@ -234,7 +234,7 @@
                                         <input 
                                             type="checkbox"
                                             class="line-checkbox w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
-                                            value="{{ $line->dpk_pettycash_requestline_id }}"
+                                            value="{{ $line->adw_pettycash_requestline_id }}"
                                             onchange="updateDeleteButtonState()">
                                     </td>
                                 @endif
@@ -266,7 +266,7 @@
                                             </button>
                                             <button 
                                                 type="button"
-                                                onclick="deleteLine({{ $line->dpk_pettycash_requestline_id }})"
+                                                onclick="deleteLine({{ $line->adw_pettycash_requestline_id }})"
                                                 class="mr-4 bg-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-sm transition-colors p-1"
                                                 title="Delete">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -453,7 +453,7 @@ function editLine(lineData) {
     var lineNameEl = document.getElementById('line_name');
     var lineValueEl = document.getElementById('line_value');
 
-    if (lineIdEl) lineIdEl.value = lineData.dpk_pettycash_requestline_id;
+    if (lineIdEl) lineIdEl.value = lineData.adw_pettycash_requestline_id;
     if (lineDescEl) lineDescEl.value = lineData.description || '';
     if (lineAmountEl) {
         lineAmountEl.value = lineData.amount || '';

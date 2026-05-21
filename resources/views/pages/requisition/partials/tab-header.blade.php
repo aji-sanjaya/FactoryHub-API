@@ -177,7 +177,7 @@
                             <option value="">- Select Cost Center -</option>
                             @if(isset($costCenters))
                                 @foreach($costCenters as $cc)
-                                    <option value="{{ $cc->id }}" {{ (isset($requisition) && $requisition->dpk_cost_center_id == $cc->id) ? 'selected' : '' }}>
+                                    <option value="{{ $cc->id }}" {{ (isset($requisition) && $requisition->c_costcenter_id == $cc->id) ? 'selected' : '' }}>
                                         {{ $cc->text }}
                                     </option>
                                 @endforeach
@@ -206,12 +206,12 @@
                     <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Checked
                         By</label>
                     <div class="col-span-1 sm:col-span-2">
-                        <select id="dpk_ad_user_checked_id" {{ $isReadOnly ? 'disabled' : '' }}
+                        <select id="adw_ad_user_checked_id" {{ $isReadOnly ? 'disabled' : '' }}
                             class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
                             <option value="">- Select -</option>
                             @if(isset($users))
                                 @foreach($users as $u)
-                                    <option value="{{ $u->id }}" {{ (isset($requisition) && $requisition->dpk_ad_user_checked_id == $u->id) ? 'selected' : '' }}>
+                                    <option value="{{ $u->id }}" {{ (isset($requisition) && $requisition->adw_ad_user_checked_id == $u->id) ? 'selected' : '' }}>
                                         {{ $u->text }}
                                     </option>
                                 @endforeach
@@ -225,12 +225,12 @@
                     <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Approved
                         By</label>
                     <div class="col-span-1 sm:col-span-2">
-                        <select id="dpk_ad_user_approved_id" {{ $isReadOnly ? 'disabled' : '' }}
+                        <select id="adw_ad_user_approved_id" {{ $isReadOnly ? 'disabled' : '' }}
                             class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
                             <option value="">- Select -</option>
                             @if(isset($users))
                                 @foreach($users as $u)
-                                    <option value="{{ $u->id }}" {{ (isset($requisition) && $requisition->dpk_ad_user_approved_id == $u->id) ? 'selected' : '' }}>
+                                    <option value="{{ $u->id }}" {{ (isset($requisition) && $requisition->adw_ad_user_approved_id == $u->id) ? 'selected' : '' }}>
                                         {{ $u->text }}
                                     </option>
                                 @endforeach

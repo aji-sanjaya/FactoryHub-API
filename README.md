@@ -1,52 +1,44 @@
-# TailAdmin Laravel - Tailwind CSS Free Laravel Dashboard
+# FactoryHub - API
 
-**TailAdmin Laravel** is a modern, production-ready admin dashboard template powered by **Laravel 12**, **Tailwind CSS v4**, **Alpine.js**, and a clean, modular architecture. TailAdmin is one of the most popular Tailwind CSS dashboard now also available for Larvael. It’s designed for building fast, scalable admin panels, CRM dashboards, SaaS backends, and any data-driven application where clarity and performance matter.
-![TailAdmin - Next.js Dashboard Preview](./tailadmin-laravel.png)
+**FactoryHub - API** is a web-based front-end portal built as a third-party application for the open-source ERP ecosystem. The application serves as an operational front end for business users, while the main transactional backbone remains **iDempiere v12**.
 
+In this architecture, FactoryHub - API provides a more focused user experience for day-to-day operations, approvals, reporting, and document handling, while iDempiere acts as the core ERP back end responsible for master data, accounting logic, document lifecycle, and enterprise transaction processing.
 
-## Quick Links
+## Project Overview
 
-* [✨ Get TailAdmin Laravel](https://tailadmin.com/laravel)
-* [📄 Documentation](https://tailadmin.com/docs)
-* [⬇️ Download](https://tailadmin.com/download)
-* [🌐 Live Demo](https://laravel-demo.tailadmin.com)
+This project is being prepared for implementation at **PT Adyawinsa Plastic Industries (API)** in **2026**. The current scope covers a growing set of operational modules that support procurement, warehouse, sales, finance, approvals, and reporting workflows. The application is intended to continue evolving after the initial rollout, with additional modules and refinements planned as business requirements mature.
 
-Here’s a tighter, more search-friendly version that highlights value and avoids fluff while keeping your structure intact.
+## What Is iDempiere?
 
-## ✨ Key Features
+**iDempiere** is an open-source ERP and CRM platform designed for integrated enterprise operations. It provides the core business engine for areas such as procurement, sales, inventory, accounting, workflow, and document processing. In this project, **iDempiere v12** functions as the system of record and transactional back end, while FactoryHub - API delivers a tailored web interface aligned with the operational needs of the implementation.
 
-* 🚀 **Laravel 12 Core** - Built on the latest Laravel release with improved routing, security, and Blade templating
-* 🎨 **Tailwind CSS v4** - Utility-first styling for rapid, consistent UI development
-* ⚡ **Alpine.js Interactivity** - Lightweight reactivity without a heavy JavaScript framework
-* 📦 **Vite Build System** - Fast dev server, instant HMR, and optimized production builds
-* 📱 **Fully Responsive Layouts** - Smooth, mobile-first design that adapts across all screen sizes
-* 🌙 **Built-in Dark Mode** - Ready-to-use modern dark theme for better usability and aesthetics
-* 📊 **Advanced UI Components** - Charts, data tables, forms, calendars, modals, and reusable blocks for complex dashboards
-* 🎯 **Production-Ready Dashboard UI** - Clean, modern interface crafted for real apps, not placeholder demos
+## Current Functional Scope
 
-### Other Versions
+Based on the menu structure and active application routes in this repository, the implemented modules currently include:
 
-- [Next.js Version](https://github.com/TailAdmin/free-nextjs-admin-dashboard)
-- [React.js Version](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard)
-- [Vue.js Version](https://github.com/TailAdmin/vue-tailwind-admin-dashboard)
-- [Angular Version](https://github.com/TailAdmin/free-angular-tailwind-dashboard)
-- [Laravel Version](https://github.com/TailAdmin/tailadmin-laravel)
+* **Dashboards** for procurement, petty cash, sales, delivery, and warehouse monitoring
+* **Procurement workflows** including Purchase Requisition, Purchase Order, Material Receipt, Approval PR, and Approval PO
+* **Sales and distribution workflows** including Sales Order, Delivery Schedule, Customer Shipment, and related document processing
+* **Finance workflows** including AP Invoice, AP Payment, AR Invoice, AR Receipt, Petty Cash Request, and Petty Cash Closing
+* **Reporting features** including Procurement Report, Purchase Order Report, Aging AP Invoice Report, and Aging AR Invoice Report
+* **Supporting capabilities** such as authentication, role-based access flow, document printing, attachment handling, journal export, and selected repost processes
+
+## Technology Stack
+
+FactoryHub - API is currently built on:
+
+* **Laravel 12** for the application framework and backend orchestration
+* **Tailwind CSS v4** for the user interface layer
+* **Alpine.js** for lightweight client-side interactivity
+* **Vite** for frontend asset bundling and development workflow
 
 ## 📋 Requirements
-To set up TailAdmin Laravel, make sure your environment includes:
+To set up FactoryHub - API, make sure your environment includes:
 
 * **PHP 8.2+**
 * **Composer** (PHP dependency manager)
 * **Node.js 18+** and **npm** (for compiling frontend assets)
 * **Database** - Works with SQLite (default), MySQL, or PostgreSQL
-
-### Tailwind CSS Laravel Dashboard
-
-TailAdmin delivers a refined Tailwind CSS Laravel Dashboard experience, combining Laravel’s robust backend with Tailwind’s flexible utility classes. The result is a clean, fast, and customizable dashboard that helps developers build modern admin interfaces without the usual front-end complexity. It’s ideal for teams looking for a Tailwind-powered Laravel starter that stays lightweight and easy to scale.
-
-### Laravel Admin Dashboard
-
-If you’re searching for a dependable Laravel Admin Dashboard template that’s easy to set up and ready for production, TailAdmin fits the job. It offers a polished UI, reusable components, optimized performance, and all the essentials needed to launch dashboards, CRM systems, and internal tools quickly. It gives developers a solid foundation, so projects move faster with fewer decisions to worry about.
 
 ### Check Your Environment
 
@@ -64,8 +56,8 @@ npm -v
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/TailAdmin/tailadmin-laravel.git
-cd tailadmin-laravel
+git clone https://github.com/aji-sanjaya/FactoryHub-API.git
+cd FactoryHub-API
 ```
 
 ### Step 2: Install PHP Dependencies
@@ -130,7 +122,7 @@ Update your `.env` file with your database credentials:
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=tailadmin_db
+DB_DATABASE=factoryhub_api
 DB_USERNAME=your_username
 DB_PASSWORD=your_password
 ```
@@ -139,10 +131,10 @@ Create the database:
 
 ```bash
 # MySQL
-mysql -u root -p -e "CREATE DATABASE tailadmin_db;"
+mysql -u root -p -e "CREATE DATABASE factoryhub_api;"
 
 # PostgreSQL
-createdb tailadmin_db
+createdb factoryhub_api
 ```
 
 Run migrations:
@@ -153,7 +145,7 @@ php artisan migrate
 
 ### Step 7: (Optional) Seed the Database
 
-If you want sample data:
+If you want application menu and supporting seed data:
 
 ```bash
 php artisan db:seed
@@ -343,7 +335,7 @@ php artisan make:migration create_your_table
 ## 📁 Project Structure
 
 ```
-tailadmin-laravel/
+FactoryHub-API/
 ├── app/                    # Application logic
 │   ├── Http/              # Controllers, Middleware, Requests
 │   ├── Models/            # Eloquent models

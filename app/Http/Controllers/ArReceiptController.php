@@ -27,12 +27,14 @@ class ArReceiptController extends Controller
             return redirect()->route('signin');
         }
 
+        $arReceiptConfig = config('idempiere.ar-receipt');
+
         if (request()->has('document_id')) {
             return $this->showForm(request('document_id'));
         }
 
-        $perPage = request()->get('per_page', 10);
-        $status = request()->get('status', ['DR', 'CO']);
+        $perPage = request()->get('per_page', $arReceiptConfig['limits']['per_page']);
+        $status = request()->get('status', $arReceiptConfig['statuses']['default_list']);
         $search = request()->get('search', '');
         $dateStart = request()->get('date_start', '');
         $dateEnd = request()->get('date_end', '');
@@ -40,12 +42,12 @@ class ArReceiptController extends Controller
         $clientId = Session::get('idempiere_client');
 
         $query = CPayment::where('c_payment.ad_client_id', $clientId)
-            ->where('c_payment.isreceipt', 'Y')
-            ->where('c_payment.isactive', 'Y')
-            ->where('c_payment.c_doctype_id', 1000008);
+            ->where('c_payment.isreceipt', $arReceiptConfig['defaults']['is_receipt'])
+            ->where('c_payment.isactive', $arReceiptConfig['defaults']['active_flag'])
+            ->where('c_payment.c_doctype_id', $arReceiptConfig['doc_types']['receipt']);
 
         $query->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_payment.c_doctype_id')
-            ->where('dt.docbasetype', 'ARR')
+            ->where('dt.docbasetype', $arReceiptConfig['doc_types']['base_type'])
             ->select('c_payment.*');
 
         if ($status !== 'all' && !empty($status)) {
@@ -66,16 +68,16 @@ class ArReceiptController extends Controller
         $payments = $query->paginate($perPage);
 
         $baseQuery = CPayment::where('c_payment.ad_client_id', $clientId)
-            ->where('c_payment.isreceipt', 'Y')
-            ->where('c_payment.isactive', 'Y')
-            ->where('c_payment.c_doctype_id', 1000008)
+            ->where('c_payment.isreceipt', $arReceiptConfig['defaults']['is_receipt'])
+            ->where('c_payment.isactive', $arReceiptConfig['defaults']['active_flag'])
+            ->where('c_payment.c_doctype_id', $arReceiptConfig['doc_types']['receipt'])
             ->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_payment.c_doctype_id')
-            ->where('dt.docbasetype', 'ARR');
+            ->where('dt.docbasetype', $arReceiptConfig['doc_types']['base_type']);
 
         $countAll = (clone $baseQuery)->count();
-        $countDraft = (clone $baseQuery)->where('c_payment.docstatus', 'DR')->count();
-        $countInProgress = (clone $baseQuery)->where('c_payment.docstatus', 'IP')->count();
-        $countCompleted = (clone $baseQuery)->whereIn('c_payment.docstatus', ['CO', 'CL'])->count();
+        $countDraft = (clone $baseQuery)->where('c_payment.docstatus', $arReceiptConfig['statuses']['draft'])->count();
+        $countInProgress = (clone $baseQuery)->where('c_payment.docstatus', $arReceiptConfig['statuses']['in_progress'])->count();
+        $countCompleted = (clone $baseQuery)->whereIn('c_payment.docstatus', $arReceiptConfig['statuses']['completed'])->count();
 
         if (request()->ajax()) {
             return response()->json([
@@ -97,6 +99,7 @@ class ArReceiptController extends Controller
 
     private function showForm($docId)
     {
+        $arReceiptConfig = config('idempiere.ar-receipt');
         $payment = null;
         if ($docId !== 'new') {
             try {
@@ -132,19 +135,19 @@ class ArReceiptController extends Controller
         $customers = DB::connection('idempiere')->select("
             SELECT c_bpartner_id AS id, name AS text
             FROM c_bpartner
-            WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer='Y'
-            ORDER BY name LIMIT 200
-        ", [$clientId]);
+            WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer=?
+            ORDER BY name LIMIT ?
+        ", [$clientId, $arReceiptConfig['filters']['is_customer'], $arReceiptConfig['limits']['customer_search']]);
 
         // Doc Types for AR Receipt
         $docTypes = DB::connection('idempiere')->select("
             SELECT dt.c_doctype_id AS id, dt.name AS text
             FROM c_doctype dt
             WHERE dt.isactive = 'Y'
-            AND dt.docbasetype = 'ARR'
+            AND dt.docbasetype = ?
             AND dt.ad_client_id = ?
             ORDER BY dt.c_doctype_id ASC
-        ", [$clientId]);
+        ", [$arReceiptConfig['doc_types']['base_type'], $clientId]);
 
         // Currencies
         $currencies = DB::connection('idempiere')->select("
@@ -167,14 +170,7 @@ class ArReceiptController extends Controller
         ", [$clientId]);
 
         // Payment Rules (Tender Types)
-        $paymentRules = [
-            ['id' => 'T', 'text' => 'Account (Transfer)'],
-            ['id' => 'X', 'text' => 'Cash'],
-            ['id' => 'K', 'text' => 'Check'],
-            ['id' => 'D', 'text' => 'Direct Debit'],
-            ['id' => 'C', 'text' => 'Credit Card'],
-            ['id' => 'A', 'text' => 'Direct Deposit'],
-        ];
+        $paymentRules = $arReceiptConfig['payment_rules'];
 
         // Customer Contacts
         $customerContacts = [];
@@ -195,7 +191,7 @@ class ArReceiptController extends Controller
             $hasActiveWorkflow = DB::connection('idempiere')
                 ->table('ad_wf_activity')
                 ->join('ad_table', 'ad_table.ad_table_id', '=', 'ad_wf_activity.ad_table_id')
-                ->where('ad_table.tablename', 'C_Payment')
+                ->where('ad_table.tablename', $arReceiptConfig['workflow']['table_name'])
                 ->where('ad_wf_activity.record_id', $payment->c_payment_id)
                 ->where('ad_wf_activity.processed', 'N')
                 ->exists();
@@ -207,7 +203,7 @@ class ArReceiptController extends Controller
         $defaultCurrencyId = null;
         $idrCurrency = DB::connection('idempiere')
             ->table('c_currency')
-            ->where('iso_code', 'IDR')
+            ->where('iso_code', $arReceiptConfig['defaults']['currency_iso_code'])
             ->where('isactive', 'Y')
             ->first();
         if ($idrCurrency) {
@@ -237,14 +233,14 @@ class ArReceiptController extends Controller
                 ? \Carbon\Carbon::parse($payment->dateacct)->format('Y-m-d')
                 : date('Y-m-d'),
             'docIdParam' => request('document_id'),
-            'isReadOnly' => $payment && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']),
-            'isDraft' => $payment && $payment->docstatus === 'DR',
+            'isReadOnly' => $payment && in_array($payment->docstatus, $arReceiptConfig['statuses']['read_only']),
+            'isDraft' => $payment && $payment->docstatus === $arReceiptConfig['statuses']['draft'],
             'activeTab' => request('tab', 'header'),
             'hasActiveWorkflow' => $hasActiveWorkflow,
             'docTypeId' => $payment ? $payment->c_doctype_id : $defaultDocTypeId,
             'currencyId' => $payment ? $payment->c_currency_id : $defaultCurrencyId,
             'payAmt' => $payment ? $payment->payamt : 0,
-            'paymentRule' => $payment ? ($payment->tendertype ?? $payment->paymentrule ?? 'T') : 'T',
+            'paymentRule' => $payment ? ($payment->tendertype ?? $payment->paymentrule ?? $arReceiptConfig['defaults']['payment_rule']) : $arReceiptConfig['defaults']['payment_rule'],
             'bankAccountId' => $payment ? $payment->c_bankaccount_id : null,
         ];
 
@@ -316,10 +312,10 @@ class ArReceiptController extends Controller
                             DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                             DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                         )
-                        ->where('fa.ad_table_id', 335)
+                        ->where('fa.ad_table_id', $arReceiptConfig['journals']['table_id'])
                         ->where('fa.record_id', $payment->c_payment_id)
                         ->orderBy('fa.fact_acct_id')
-                        ->paginate(10)
+                        ->paginate($arReceiptConfig['limits']['journals_per_page'])
                         ->appends(['ajax_tab' => 'journals']);
                 }
                 $viewData['journals'] = $journals;
@@ -372,7 +368,7 @@ class ArReceiptController extends Controller
             'C_DocType_ID' => (int) $validated['doc_type_id'],
             'DateTrx' => $validated['payment_date'],
             'DateAcct' => $validated['date_acct'] ?? $validated['payment_date'],
-            'IsReceipt' => 'Y',
+            'IsReceipt' => config('idempiere.ar-receipt.defaults.is_receipt'),
             'C_BPartner_ID' => $bpartnerId,
             'C_Currency_ID' => (int) $validated['c_currency_id'],
             'TenderType' => $validated['payment_rule'],
@@ -500,6 +496,7 @@ class ArReceiptController extends Controller
     public function destroy(Request $request)
     {
         $validated = $request->validate(['document_id' => 'required']);
+        $draftStatus = config('idempiere.ar-receipt.statuses.draft');
 
         try {
             $paymentId = Crypt::decryptString($validated['document_id']);
@@ -513,7 +510,7 @@ class ArReceiptController extends Controller
             if (!$payment) {
                 return response()->json(['message' => 'AR Receipt not found.'], 404);
             }
-            if ($payment->docstatus !== 'DR') {
+            if ($payment->docstatus !== $draftStatus) {
                 return response()->json(['message' => 'Only Draft payments can be deleted.'], 422);
             }
 
@@ -604,6 +601,7 @@ class ArReceiptController extends Controller
     public function getOpenInvoices(Request $request)
     {
         try {
+            $arReceiptConfig = config('idempiere.ar-receipt');
             $docId = Crypt::decryptString($request->document_id);
             $payment = CPayment::findOrFail($docId);
             $customerId = $payment->c_bpartner_id;
@@ -614,7 +612,9 @@ class ArReceiptController extends Controller
             }
 
             $search = $request->get('q', '');
-            $perPage = $request->get('per_page', 20);
+            $perPage = $request->get('per_page', $arReceiptConfig['limits']['open_invoices_per_page']);
+            $excludedStatuses = $arReceiptConfig['filters']['excluded_allocation_statuses'];
+            $excludedStatusesSql = implode("','", array_map('addslashes', $excludedStatuses));
 
             $query = DB::connection('idempiere')
                 ->table('c_invoice')
@@ -625,8 +625,8 @@ class ArReceiptController extends Controller
                     c_invoice.grandtotal,
                     c_invoice.docstatus,
                     invoiceopen(c_invoice.c_invoice_id, 0) as invoice_open_amt,
-                    COALESCE(SUM(CASE WHEN p.docstatus NOT IN ('VO', 'RE') THEN pa.amount + pa.discountamt + pa.writeoffamt ELSE 0 END), 0) as allocated_by_this_payment,
-                    (invoiceopen(c_invoice.c_invoice_id, 0) - COALESCE(SUM(CASE WHEN p.docstatus NOT IN ('VO', 'RE') THEN pa.amount + pa.discountamt + pa.writeoffamt ELSE 0 END), 0)) as open_amt
+                    COALESCE(SUM(CASE WHEN p.docstatus NOT IN ('{$excludedStatusesSql}') THEN pa.amount + pa.discountamt + pa.writeoffamt ELSE 0 END), 0) as allocated_by_this_payment,
+                    (invoiceopen(c_invoice.c_invoice_id, 0) - COALESCE(SUM(CASE WHEN p.docstatus NOT IN ('{$excludedStatusesSql}') THEN pa.amount + pa.discountamt + pa.writeoffamt ELSE 0 END), 0)) as open_amt
                 ")
                 ->leftJoin('c_paymentallocate as pa', function($join) use ($docId) {
                     $join->on('pa.c_invoice_id', '=', 'c_invoice.c_invoice_id')
@@ -636,8 +636,8 @@ class ArReceiptController extends Controller
                 ->leftJoin('c_payment as p', 'p.c_payment_id', '=', 'pa.c_payment_id')
                 ->where('c_invoice.c_bpartner_id', $customerId)
                 ->where('c_invoice.c_currency_id', $currencyId)
-                ->where('c_invoice.issotrx', 'Y')
-                ->whereIn('c_invoice.docstatus', ['CO', 'CL'])  // Only completed/closed invoices (not reversed/voided)
+                ->where('c_invoice.issotrx', $arReceiptConfig['filters']['invoice_is_so_trx'])
+                ->whereIn('c_invoice.docstatus', $arReceiptConfig['filters']['invoice_doc_statuses'])
                 ->where('c_invoice.isactive', 'Y')
                 ->groupBy(
                     'c_invoice.c_invoice_id',
@@ -646,8 +646,7 @@ class ArReceiptController extends Controller
                     'c_invoice.grandtotal',
                     'c_invoice.docstatus'
                 )
-                // Only show invoices with open amount after deducting non-reversed payment allocations
-                ->havingRaw('(invoiceopen(c_invoice.c_invoice_id, 0) - COALESCE(SUM(CASE WHEN p.docstatus NOT IN (\'VO\', \'RE\') THEN pa.amount + pa.discountamt + pa.writeoffamt ELSE 0 END), 0)) > 0');
+                ->havingRaw("(invoiceopen(c_invoice.c_invoice_id, 0) - COALESCE(SUM(CASE WHEN p.docstatus NOT IN ('{$excludedStatusesSql}') THEN pa.amount + pa.discountamt + pa.writeoffamt ELSE 0 END), 0)) > 0");
 
             if ($search) {
                 $query->where('c_invoice.documentno', 'ilike', "%{$search}%");
@@ -872,17 +871,7 @@ class ArReceiptController extends Controller
 
     private function getStatusLabel($docstatus)
     {
-        $map = [
-            'DR' => 'Draft',
-            'IP' => 'In Progress',
-            'CO' => 'Completed',
-            'CL' => 'Closed',
-            'VO' => 'Voided',
-            'RE' => 'Reversed',
-            'NA' => 'Not Approved',
-            'IN' => 'Invalid',
-            'AP' => 'Approved',
-        ];
+        $map = config('idempiere.ar-receipt.statuses.labels', []);
         return $map[$docstatus] ?? $docstatus;
     }
 }

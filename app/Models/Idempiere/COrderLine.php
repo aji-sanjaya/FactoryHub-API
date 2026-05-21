@@ -31,7 +31,21 @@ class COrderLine extends Model
         'pricelist',
         'linenetamt',
         'description',
-        // Add others (discount etc)
+        // Withholding Tax (PPh23)
+        'iswithholding',
+        'withholdingtype_id',
+        'withholdingrate',
+        'withholdingbaseamt',
+        'withholdingamt',
+        'withholdingamount',
+    ];
+
+    protected $casts = [
+        'iswithholding'       => 'boolean',
+        'withholdingrate'     => 'float',
+        'withholdingbaseamt'  => 'float',
+        'withholdingamt'      => 'float',
+        'withholdingamount'   => 'float',
     ];
 
     public function order()

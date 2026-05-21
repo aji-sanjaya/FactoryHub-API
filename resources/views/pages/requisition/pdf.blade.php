@@ -13,7 +13,7 @@
         .container {
             width: 100%;
         }
-        table {
+        table { 
             width: 100%;
             border-collapse: collapse;
         }
@@ -98,6 +98,9 @@
             font-weight: bold;
             padding: 10px 5px;
         }
+        .items-table .last-row td {
+            border-bottom: 2px solid black;
+        }
         
         /* Footer */
         .footer {
@@ -155,91 +158,116 @@
 <body>
     <div class="container">
         <!-- Header -->
-        <table class="header-table">
+        <table style="width: 100%; border-collapse: collapse;">
+            <!-- Row 1: Company Address | Logo + Title -->
             <tr>
-                <td class="logo-cell">
-                    @if(!empty($logoBase64))
-                        <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;">
-                    @else
-                        <div class="logo-box">D</div>
+                <td style="border-bottom: 1px solid black; padding: 8px; width: 60%; vertical-align: top;">
+                    <strong style="font-size: 13pt;">{{ $clientName ?? '' }}</strong><br>
+                    @if(!empty($orgInfo))
+                        @if(!empty($orgInfo->address1))<span style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
+                        @if(!empty($orgInfo->address2))<span style="font-size: 9pt;">{{ $orgInfo->address2 }}</span><br>@endif
+                        @if(!empty($orgInfo->address3))<span style="font-size: 9pt;">{{ $orgInfo->address3 }}</span>@endif
                     @endif
                 </td>
-                <td class="title-cell">
-                    <h1>PURCHASE REQUISITION</h1>
-                    <h2>PT. DHARMAMULIA PRIMA KARYA</h2>
+                <td style="border-bottom: 1px solid black; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
+                    @if(!empty($logoBase64))
+                        <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;"><br>
+                    @endif
+                    <strong style="font-size: 13pt;">Purchase Requisition IT</strong>
                 </td>
-                <td class="info-cell">
-                    <div class="info-row"><span class="info-label">Doc. No</span>: {{ $requisition->documentno }}</div>
-                    <div class="info-row"><span class="info-label">Eff. Date</span>: {{ date('d M Y', strtotime($requisition->datedoc)) }}</div>
-                    <div class="info-row"><span class="info-label">Revision</span>: 0</div>
-                    <div class="info-row"><span class="info-label">Page</span>: 1</div>
+            </tr>
+            <!-- Row 2: Doc Info | Prepared by | Legalized By | Approved by -->
+            <tr>
+                <td colspan="2" style="border: 1px solid black; border-top: none; padding: 0;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="border-right: 1px solid black; padding: 5px; width: 46%; vertical-align: top; font-size: 10pt;">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <tr>
+                                        <td style="width: 32%; padding: 0; border: none; vertical-align: top;">Document</td>
+                                        <td style="width: 4%; padding: 0; border: none; vertical-align: top;">:</td>
+                                        <td style="padding: 0; border: none; vertical-align: top;"><strong>{{ $requisition->documentno }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 0; border: none; vertical-align: top;">Date</td>
+                                        <td style="padding: 0; border: none; vertical-align: top;">:</td>
+                                        <td style="padding: 0; border: none; vertical-align: top;"><strong>{{ date('d M Y', strtotime($requisition->datedoc)) }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 0; border: none; vertical-align: top;">Status</td>
+                                        <td style="padding: 0; border: none; vertical-align: top;">:</td>
+                                        <td style="padding: 0; border: none; vertical-align: top;">{{ $requisition->status_label }}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td style="border-right: 1px solid black; padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
+                                <em>Prepared by</em><br>
+                                @if($preparedQr)
+                                    <img src="{{ $preparedQr }}" alt="QR" style="height: 60px; width: 60px; margin: 4px auto; display: block;">
+                                @else
+                                    <div style="height: 68px;"></div>
+                                @endif
+                                <div style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">{{ $preparedBy ?? '' }}</div>
+                                <div style="font-size: 8pt;">{{ $preparedDate }}</div>
+                            </td>
+                            <td style="border-right: 1px solid black; padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
+                                <em>Legalized By</em><br>
+                                @if($checkedQr)
+                                    <img src="{{ $checkedQr }}" alt="QR" style="height: 60px; width: 60px; margin: 4px auto; display: block;">
+                                @else
+                                    <div style="height: 68px;"></div>
+                                @endif
+                                <div style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">{{ $checkedBy ?? '' }}</div>
+                                <div style="font-size: 8pt;">{{ $checkedDate }}</div>
+                            </td>
+                            <td style="padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
+                                <em>Approved by</em><br>
+                                @if($approvedQr)
+                                    <img src="{{ $approvedQr }}" alt="QR" style="height: 60px; width: 60px; margin: 4px auto; display: block;">
+                                @else
+                                    <div style="height: 68px;"></div>
+                                @endif
+                                <div style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">{{ $approvedBy ?? '' }}</div>
+                                <div style="font-size: 8pt;">{{ $approvedDate }}</div>
+                            </td>
+                        </tr>
+                    </table>
                 </td>
             </tr>
         </table>
-
-        <!-- Sub Header -->
-        <div class="sub-header">
-            <table>
-                <tr>
-                    <td width="15%">PR No</td>
-                    <td width="35%">: {{ $requisition->documentno }}</td>
-                    <td width="20%">Expected Delivery</td>
-                    <td width="30%">: {{ date('d M Y', strtotime($requisition->daterequired)) }}</td>
-                </tr>
-                <tr>
-                    <td>Date</td>
-                    <td>: {{ date('d M Y', strtotime($requisition->datedoc)) }}</td>
-                    <td>Page</td>
-                    <td>: 1 / 1</td>
-                </tr>
-            </table>
-        </div>
 
         <!-- Items Table -->
         <table class="items-table" cellspacing="0">
             <thead>
                 <tr>
-                    <th width="5%">NO</th>
-                    <th width="15%">Item</th>
-                    <th width="35%">Specification</th>
-                    <th width="15%" class="text-right">Qty</th>
-                    <th width="15%" class="text-right">Price</th>
-                    <th width="15%" class="text-right">Subtotal</th>
+                    <th width="7%">Line</th>
+                    <th width="43%">Product No / Name / SO Ref.</th>
+                    <th width="6%" class="text-right">Qty</th>
+                    <th width="8%">UoM</th>
+                    <th width="13%">Required</th>
+                    <th width="23%">Description</th>
                 </tr>
             </thead>
             <tbody>
-                @php $total = 0; @endphp
-                @foreach($lines as $index => $line)
-                    @php 
-                        $subtotal = $line->qty * $line->priceactual; 
-                        $total += $subtotal;
-                    @endphp
+                @foreach($lines as $line)
                     <tr>
-                        <td class="text-center">{{ $index + 1 }}</td>
+                        <td class="text-center">{{ $line->line }}</td>
                         <td>{{ $line->product_code }}</td>
-                        <td>
-                            {{ $line->product_name }}<br>
-                            <span style="font-size: 8pt; color: #666;">{{ $line->description }}</span>
-                        </td>
-                        <td class="text-right">{{ number_format($line->qty, 0) }} {{ $line->uom_name }}</td>
-                        <td class="text-right">{{ number_format($line->priceactual, 2) }}</td>
-                        <td class="text-right">{{ number_format($subtotal, 2) }}</td>
+                        <td class="text-right">{{ number_format($line->qty, 0) }}</td>
+                        <td>{{ $line->uom_name }}</td>
+                        <td>{{ !empty($line->daterequired) ? date('d/m/Y', strtotime($line->daterequired)) : '' }}</td>
+                        <td style="font-size: 9pt;">{{ $line->description }}</td>
                     </tr>
-                @endforeach
-                
-                <!-- Spacer rows if needed -->
-                @for($i = count($lines); $i < 5; $i++)
-                    <tr>
-                        <td colspan="6" style="height: 20px;">&nbsp;</td>
+                    <tr @if($loop->last) class="last-row" @endif>
+                        <td></td>
+                        <td style="font-size: 9pt; padding-top: 0;">{{ $line->product_name }}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
                     </tr>
-                @endfor
+                @endforeach 
             </tbody>
-            <tfoot>
-                <tr class="total-row">
-                    <td colspan="5" class="text-right">Total :</td>
-                    <td class="text-right">{{ number_format($total, 2) }}</td>
-                </tr>
-            </tfoot>
         </table>
 
         <!-- Footer -->
@@ -247,50 +275,9 @@
             <div class="footer-note">
                 <strong>Note :</strong><br>
                 {{ $requisition->description ?: '-' }}
-            </div>
+            </div> 
 
-            <div class="disclaimer">
-                - Form ini bukan permintaan pembayaran atau order pembelian ke supplier, hanya digunakan untuk internal perusahaan<br>
-                - Form ini harus diisi lengkap dan benar disertai dengan supporting dokumen yang diperlukan<br>
-                - Purchase Request harus sudah mendapatkan approval dari authorized person sebelum disampaikan ke Purchasing<br>
-                - Apabila pengisian form ini tidak lengkap, maka akan kami kembalikan ke user untuk dilengkapi
-            </div>
 
-            <!-- Signatures -->
-            <table class="signature-table">
-                <tr>
-                    <td width="33%">
-                        <div class="sig-label">Prepared By</div>
-                        @if($preparedQr) 
-                            <div class="sig-qr"><img src="{{ $preparedQr }}" alt="QR" style="height: 80px; width: 80px;"></div>
-                        @else
-                            <div class="sig-qr" style="height: 80px;"></div>
-                        @endif
-                        <div class="sig-name">{{ $preparedBy ?? 'Mulyadi' }}</div>
-                        <div class="sig-date">{{ $preparedDate }}</div>
-                    </td>
-                    <td width="33%">
-                        <div class="sig-label">Checked By</div>
-                        @if($checkedQr) 
-                            <div class="sig-qr"><img src="{{ $checkedQr }}" alt="QR" style="height: 80px; width: 80px;"></div>
-                        @else
-                            <div class="sig-qr" style="height: 80px;"></div>
-                        @endif
-                        <div class="sig-name">{{ $checkedBy ?? 'Arseno' }}</div>
-                         <div class="sig-date">{{ $checkedDate }}</div>
-                    </td>
-                    <td width="33%">
-                        <div class="sig-label">Approved By</div>
-                        @if($approvedQr) 
-                            <div class="sig-qr"><img src="{{ $approvedQr }}" alt="QR" style="height: 80px; width: 80px;"></div>
-                        @else
-                            <div class="sig-qr" style="height: 80px;"></div>
-                        @endif
-                        <div class="sig-name">{{ $approvedBy ?? 'Christian' }}</div>
-                         <div class="sig-date">{{ $approvedDate }}</div>
-                    </td>
-                </tr>
-            </table>
         </div>
     </div>
 </body>

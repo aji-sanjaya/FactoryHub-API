@@ -58,14 +58,9 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right">
                             @php
-                                $statusLabel = $order->status_label; // Accessor from COrder model
-                                $statusClass = match ($statusLabel) {
-                                    'Completed', 'Closed', 'Approved' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-                                    'In Progress' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-                                    'Drafted' => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-                                    'Voided', 'Rejected' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-                                    default => 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                                };
+                                $statusConfig = config('idempiere.approval-po.statuses');
+                                $statusLabel = $statusConfig['labels'][$order->docstatus] ?? ($order->status_label ?? $order->docstatus);
+                                $statusClass = $statusConfig['badge_classes'][$statusLabel] ?? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
                             @endphp
                             <span
                                 class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $statusClass }}">

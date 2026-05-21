@@ -3,11 +3,23 @@
 @section('content')
 
     @php
+        $arInvoiceConfig = config('idempiere.ar-invoice');
+        $statusConfig = $arInvoiceConfig['statuses'] ?? [];
+        $workflowConfig = $arInvoiceConfig['workflow'] ?? [];
         $isNew      = is_null($invoice);
         $activeTab  = $activeTab ?? 'header';
         $docNo      = $isNew ? '** New **' : $invoice->documentno;
         $docIdParam = request('document_id');
-        $isReadOnly = !$isNew && in_array($invoice->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $readOnlyStatuses = $statusConfig['read_only'] ?? ['CO', 'CL', 'VO', 'RE'];
+        $draftStatus = $statusConfig['draft'] ?? 'DR';
+        $inProgressStatus = $statusConfig['in_progress'] ?? 'IP';
+        $completeFromStatuses = $workflowConfig['complete_from'] ?? [$draftStatus, $inProgressStatus];
+        $voidFromStatuses = $workflowConfig['void_from'] ?? [$draftStatus];
+        $reverseFromStatuses = $workflowConfig['reverse_from'] ?? ['CO'];
+        $closeFromStatuses = $workflowConfig['close_from'] ?? ['CO'];
+        $printExcludedStatuses = $workflowConfig['print_excluded'] ?? ['VO'];
+        $shipmentLinesPerPage = $arInvoiceConfig['limits']['shipment_lines_per_page'] ?? 15;
+        $isReadOnly = !$isNew && in_array($invoice->docstatus, $readOnlyStatuses);
     @endphp
 
     <div>
@@ -55,7 +67,7 @@
                             {{ $isNew ? 'Create Invoice' : 'Save Changes' }}
                         </button>
                     @endif
-                    @if(!$isNew && $invoice->docstatus !== 'VO')
+                    @if(!$isNew && !in_array($invoice->docstatus, $printExcludedStatuses))
                         <button onclick="openInvoicePrintModal('{{ route('ar-invoice.print', ['id' => \Illuminate\Support\Facades\Crypt::encryptString($invoice->c_invoice_id)]) }}')"
                             class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-4 focus:ring-gray-200 shadow-sm hover:shadow transition-all gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -146,8 +158,8 @@
                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Select an action to perform on this document</p>
                 </div>
                 <div class="px-6 py-5 space-y-3">
-                    @php $cs = $invoice->docstatus ?? 'DR'; @endphp
-                    @if(in_array($cs, ['DR', 'IN']))
+                    @php $cs = $invoice->docstatus ?? $draftStatus; @endphp
+                    @if(in_array($cs, $completeFromStatuses))
                         <button onclick="processDocument('CO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
@@ -159,7 +171,7 @@
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'DR')
+                    @if(in_array($cs, $voidFromStatuses))
                         <button onclick="processDocument('VO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
@@ -171,7 +183,7 @@
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'CO')
+                    @if(in_array($cs, $reverseFromStatuses))
                         <button onclick="processDocument('RC')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:border-orange-800 dark:hover:bg-orange-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
@@ -182,16 +194,18 @@
                                 <div class="text-xs text-orange-600 dark:text-orange-400">Reverse this completed invoice</div>
                             </div>
                         </button>
-                        <button onclick="processDocument('CL')"
-                            class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800/80 transition-colors">
-                            <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-sm font-medium text-gray-800 dark:text-gray-300">Close</div>
-                                <div class="text-xs text-gray-600 dark:text-gray-400">Close this invoice document</div>
-                            </div>
-                        </button>
+                        @if(in_array($cs, $closeFromStatuses))
+                            <button onclick="processDocument('CL')"
+                                class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800/80 transition-colors">
+                                <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-medium text-gray-800 dark:text-gray-300">Close</div>
+                                    <div class="text-xs text-gray-600 dark:text-gray-400">Close this invoice document</div>
+                                </div>
+                            </button>
+                        @endif
                     @endif
                 </div>
                 <div class="px-6 pb-5">
@@ -788,7 +802,7 @@
             document.getElementById('shipment_pagination_btns').innerHTML = '';
 
             const docId = '{{ $docIdParam ?? "" }}';
-            fetch(`{{ route('ar-invoice.api.shipment-lines') }}?q=${encodeURIComponent(search)}&page=${page}&per_page=15&document_id=${encodeURIComponent(docId)}`)
+            fetch(`{{ route('ar-invoice.api.shipment-lines') }}?q=${encodeURIComponent(search)}&page=${page}&per_page={{ $shipmentLinesPerPage }}&document_id=${encodeURIComponent(docId)}`)
                 .then(res => res.json())
                 .then(data => {
                     document.getElementById('shipment_loading').classList.add('hidden');

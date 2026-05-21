@@ -64,6 +64,7 @@
                                 <label
                                     class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity*</label>
                                 <input type="number" name="qty" id="qty" min="0.01" step="0.01" required
+                                    oninput="recalcWithholding()"
                                     class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm">
                             </div>
 
@@ -71,6 +72,7 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Price</label>
                                 <input type="number" name="price" id="price" min="0" step="0.01"
+                                    oninput="recalcWithholding()"
                                     class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm">
                             </div>
                         </div>
@@ -81,6 +83,53 @@
                                 Note</label>
                             <textarea name="description" id="description" rows="3"
                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"></textarea>
+                        </div>
+
+                        <!-- Withholding Tax (PPh23) -->
+                        <div class="border border-orange-100 dark:border-orange-900/40 rounded-lg p-4 space-y-4 bg-orange-50/40 dark:bg-orange-900/10">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="is_withholding" name="is_withholding" value="1"
+                                    onchange="onWithholdingToggle(this.checked)"
+                                    class="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-400 cursor-pointer">
+                                <label for="is_withholding" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                                    Is Withholding Tax
+                                    <span class="ml-1 text-xs font-normal text-orange-500">(PPh23)</span>
+                                </label>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Withholding Rate -->
+                                <div>
+                                    <label for="withholding_rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Withholding Rate (%)
+                                    </label>
+                                    <div class="relative">
+                                        <input type="number" id="withholding_rate" name="withholding_rate"
+                                            value="2" min="0" step="0.01" disabled
+                                            oninput="recalcWithholding()"
+                                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm pr-8 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400 dark:disabled:bg-gray-800 transition-colors">
+                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                            <span class="text-gray-400 text-sm">%</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Withholding Amount -->
+                                <div>
+                                    <label for="withholding_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Withholding Amount
+                                        <span class="text-xs text-gray-400 font-normal ml-1">(auto)</span>
+                                    </label>
+                                    <div class="relative">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <span class="text-gray-400 text-sm">Rp</span>
+                                        </div>
+                                        <input type="text" id="withholding_amount" name="withholding_amount"
+                                            readonly placeholder="0.00"
+                                            class="w-full rounded-md border-gray-200 bg-gray-50 pl-10 cursor-not-allowed dark:bg-gray-800/50 dark:border-gray-600 dark:text-orange-400 text-orange-600 sm:text-sm font-medium">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Actions -->
@@ -192,6 +241,39 @@
                     }
                 });
             });
+
+            function onWithholdingToggle(checked) {
+                const rateInput = document.getElementById('withholding_rate');
+                rateInput.disabled = !checked;
+                if (checked) {
+                    if (!rateInput.value || rateInput.value === '0') {
+                        rateInput.value = '2';
+                    }
+                }
+                recalcWithholding();
+            }
+
+            function recalcWithholding() {
+                const isChecked = document.getElementById('is_withholding').checked;
+                const amtInput = document.getElementById('withholding_amount');
+
+                if (!isChecked) {
+                    amtInput.value = '';
+                    return;
+                }
+
+                const qty = parseFloat(document.getElementById('qty').value) || 0;
+                const price = parseFloat(document.getElementById('price').value) || 0;
+                const rate = parseFloat(document.getElementById('withholding_rate').value) || 0;
+
+                const lineAmount = qty * price;
+                const withholdingAmt = lineAmount * rate / 100;
+
+                amtInput.value = withholdingAmt.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
         </script>
     @endpush
 @endsection

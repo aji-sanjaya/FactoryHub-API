@@ -12,7 +12,7 @@ class IdempiereService
 
     public function __construct()
     {
-        $this->baseUrl = 'https://idempiere.dpkgreenlog.id/api/v1';
+        $this->baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
     }
 
     /**
@@ -21,7 +21,7 @@ class IdempiereService
     public function login(string $username, string $password)
     {
         try {
-            $response = Http::post("{$this->baseUrl}/auth/tokens", [
+            $response = Http::withoutVerifying()->post("{$this->baseUrl}/auth/tokens", [
                 'userName' => $username,
                 'password' => $password,
             ]);
@@ -56,7 +56,7 @@ class IdempiereService
                 $payload['parameters']['warehouseId'] = $warehouseId;
             }
 
-            $response = Http::post("{$this->baseUrl}/auth/tokens", $payload);
+            $response = Http::withoutVerifying()->post("{$this->baseUrl}/auth/tokens", $payload);
 
             if ($response->successful()) {
                 return $response->json();
@@ -103,7 +103,7 @@ class IdempiereService
                 $payload['parameters']['warehouseId'] = (int) $warehouseId;
             }
 
-            $response = Http::post("{$this->baseUrl}/auth/tokens", $payload);
+            $response = Http::withoutVerifying()->post("{$this->baseUrl}/auth/tokens", $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -207,7 +207,8 @@ class IdempiereService
                 $payload['parameters']['warehouseId'] = (int) $warehouseId;
             }
 
-            $response = Http::post('https://idempiere.dpkgreenlog.id/api/v1/auth/tokens', $payload);
+            $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+            $response = Http::withoutVerifying()->post("{$baseUrl}/auth/tokens", $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -231,7 +232,7 @@ class IdempiereService
     {
         return $this->executeWithRetry(function () use ($endpoint, $data) {
             $token = Session::get('api_token');
-            return Http::withToken($token)->post("{$this->baseUrl}/{$endpoint}", $data);
+            return Http::withoutVerifying()->withToken($token)->post("{$this->baseUrl}/{$endpoint}", $data);
         });
     }
 
@@ -239,7 +240,7 @@ class IdempiereService
     {
         return $this->executeWithRetry(function () use ($endpoint, $data) {
             $token = Session::get('api_token');
-            return Http::withToken($token)->put("{$this->baseUrl}/{$endpoint}", $data);
+            return Http::withoutVerifying()->withToken($token)->put("{$this->baseUrl}/{$endpoint}", $data);
         });
     }
 
@@ -247,7 +248,7 @@ class IdempiereService
     {
         return $this->executeWithRetry(function () use ($endpoint, $params) {
             $token = Session::get('api_token');
-            return Http::withToken($token)->get("{$this->baseUrl}/{$endpoint}", $params);
+            return Http::withoutVerifying()->withToken($token)->get("{$this->baseUrl}/{$endpoint}", $params);
         });
     }
 
@@ -264,7 +265,7 @@ class IdempiereService
                 'data' => base64_encode($content)
             ];
 
-            return Http::withToken($token)
+            return Http::withoutVerifying()->withToken($token)
                 ->post("{$this->baseUrl}/{$endpoint}", $payload);
         });
     }
@@ -273,7 +274,7 @@ class IdempiereService
     {
         return $this->executeWithRetry(function () use ($endpoint) {
             $token = Session::get('api_token');
-            return Http::withToken($token)->delete("{$this->baseUrl}/{$endpoint}");
+            return Http::withoutVerifying()->withToken($token)->delete("{$this->baseUrl}/{$endpoint}");
         });
     }
 }

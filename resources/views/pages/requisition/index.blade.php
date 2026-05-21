@@ -139,22 +139,15 @@
 
                 // Pagination Click Interceptor
                 tableWrapper.addEventListener('click', function (e) {
-                    const link = e.target.closest('a');
-                    if (link && tableWrapper.contains(link)) {
-                        // Check if it's a pagination link (roughly)
-                        // Or just intercept ALL links inside the wrapper?
-                        // Yes, actions usually are buttons or specific links. Pagination are <a>.
-                        // We should be careful about "View" or "Edit" links if they are <a> tags.
-                        // View link probably goes to a new page. Pagination stays here.
-                        // Pagination links usually have 'page=' in href, or we can check parent class.
-                        // Our custom pagination 'tailwind-buttons' produces plain <a> tags.
-                        // Let's check if href contains 'page='.
-
-                        const href = link.getAttribute('href');
-                        if (href && href.includes('page=')) {
-                            e.preventDefault();
-                            fetchData(href);
-                        }
+                    const link = e.target.closest('a[href]');
+                    if (link && link.href && link.href.includes('page=')) {
+                        e.preventDefault();
+                        let href = link.getAttribute('href');
+                        @if(app()->environment('production'))
+                        // Force HTTPS to prevent blocked:mixed-content error in production
+                        href = href.replace(/^http:\/\//i, 'https://');
+                        @endif
+                        fetchData(href);
                     }
                 });
             });

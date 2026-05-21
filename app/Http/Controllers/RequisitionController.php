@@ -23,6 +23,8 @@ class RequisitionController extends Controller
      */
     public function index()
     {
+        $requisitionConfig = config('idempiere.create-pr');
+
         // 1. Check Authentication / Session Context
         if (!\Illuminate\Support\Facades\Session::has('api_token')) {
             return redirect()->route('signin');
@@ -114,8 +116,8 @@ class RequisitionController extends Controller
 
             // Fetch Cost Centers
             $costCenters = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
-                SELECT dpk_cost_center_id AS id, name AS text
-                FROM dpk_cost_center
+                SELECT c_costcenter_id AS id, name AS text
+                FROM c_costcenter
                 WHERE isactive = 'Y' AND ad_client_id = ?
                 ORDER BY name
             ", [$clientId]);
@@ -127,14 +129,17 @@ class RequisitionController extends Controller
             $clientName = $client ? $client->name : 'Unknown Client';
 
             // Fetch Lines if Editing (Paginated)
-            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
+            $defaultLinePerPage = $requisitionConfig['limits']['line_default_per_page'];
+            $linePerPageOptions = $requisitionConfig['limits']['line_per_page_options'];
+
+            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $defaultLinePerPage);
             if ($requisition) {
                 // Get Current Page and Per Page
                 $page = request()->get('lines_page', 1);
-                $perPage = request()->get('per_page', 10);
+                $perPage = (int) request()->get('per_page', $defaultLinePerPage);
                 // Validate per_page
-                if (!in_array($perPage, [10, 25, 50, 100])) {
-                    $perPage = 10;
+                if (!in_array($perPage, $linePerPageOptions, true)) {
+                    $perPage = $defaultLinePerPage;
                 }
 
                 // Base Query
@@ -185,7 +190,7 @@ class RequisitionController extends Controller
                 'costCenters' => $costCenters,
                 'documentIdParam' => $docId,
                 'docNo' => isset($requisition) ? $requisition->documentno : '** New **',
-                'status' => isset($requisition) ? $requisition->status_label : 'Drafted',
+                'status' => isset($requisition) ? $requisition->status_label : $requisitionConfig['defaults']['document_status_label'],
                 'desc' => isset($requisition) ? $requisition->description : '',
                 'currentOrgId' => isset($requisition) ? $requisition->ad_org_id : null,
                 // Note: Logic for defaults is currently in Blade, but for Partials we might need it here or rely on Blade to re-calc.
@@ -194,7 +199,8 @@ class RequisitionController extends Controller
                 'isNew' => is_null($requisition),
                 // Pass DocId Param consistent with Blade
                 'docIdParam' => request('document_id'),
-                'isReadOnly' => isset($requisition) && in_array($requisition->docstatus, ['CO', 'CL', 'VO', 'RE'])
+                'isReadOnly' => isset($requisition) && in_array($requisition->docstatus, $requisitionConfig['statuses']['read_only'], true),
+                'requisitionConfig' => $requisitionConfig,
             ];
 
             // AJAX Partial Rendering
@@ -274,19 +280,19 @@ class RequisitionController extends Controller
 
         // Stats: Completed (CO, CL)
         $countCompleted = (clone $statsQuery)
-            ->whereIn('docstatus', ['CO', 'CL'])
+            ->whereIn('docstatus', $requisitionConfig['statuses']['completed'])
             ->count();
 
         // Stats: Draft (DR, IN)
         $countDraft = (clone $statsQuery)
-            ->whereIn('docstatus', ['DR', 'IN'])
+            ->whereIn('docstatus', $requisitionConfig['statuses']['draft'])
             ->count();
 
         // Stats: In Progress (IP) - Maybe include AP (Approved) as In Progress? 
         // User asked for "Inprogress".
         // Let's include IP.
         $countInProgress = (clone $statsQuery)
-            ->where('docstatus', 'IP')
+            ->where('docstatus', $requisitionConfig['statuses']['in_progress'])
             ->count();
 
         // Stats: All Documents (Total for month)
@@ -324,7 +330,7 @@ class RequisitionController extends Controller
         // Sort by Created desc or DateDoc desc
         $requisitions = $query->orderBy('datedoc', 'desc')
             ->orderBy('created', 'desc')
-            ->paginate(10)
+            ->paginate($requisitionConfig['limits']['list_per_page'])
             ->withQueryString();
 
         if (request()->ajax()) {
@@ -384,8 +390,8 @@ class RequisitionController extends Controller
             'description' => 'nullable|string',
             'pricelist_id' => 'required',
             'priority_rule' => 'required',
-            'dpk_ad_user_checked_id' => 'nullable',
-            'dpk_ad_user_approved_id' => 'nullable',
+            'adw_ad_user_checked_id' => 'nullable',
+            'adw_ad_user_approved_id' => 'nullable',
             'cost_center_id' => 'nullable',
         ]);
 
@@ -425,11 +431,11 @@ class RequisitionController extends Controller
             'DateRequired' => $dateRequired,
             'DateDoc' => $dateDoc,
             'AD_User_ID' => (int) $sessionUserId,
-            'C_DocType_ID' => 1000018, // Purchase Requisition
+            'C_DocType_ID' => (int) config('idempiere.create-pr.doc_types.purchase_requisition'),
             // Custom Fields
-            'DPK_AD_User_Checked_ID' => !empty($validated['dpk_ad_user_checked_id']) ? (int) $validated['dpk_ad_user_checked_id'] : null,
-            'DPK_AD_User_Approved_ID' => !empty($validated['dpk_ad_user_approved_id']) ? (int) $validated['dpk_ad_user_approved_id'] : null,
-            'DPK_Cost_Center_ID' => !empty($validated['cost_center_id']) ? (int) $validated['cost_center_id'] : null,
+            'ADW_AD_User_Checked_ID' => !empty($validated['adw_ad_user_checked_id']) ? (int) $validated['adw_ad_user_checked_id'] : null,
+            'ADW_AD_User_Approved_ID' => !empty($validated['adw_ad_user_approved_id']) ? (int) $validated['adw_ad_user_approved_id'] : null,
+            'C_CostCenter_ID' => !empty($validated['cost_center_id']) ? (int) $validated['cost_center_id'] : null,
             'IsActive' => true,
         ];
 
@@ -476,8 +482,8 @@ class RequisitionController extends Controller
             'description' => 'nullable|string',
             'pricelist_id' => 'nullable',
             'priority_rule' => 'nullable|string',
-            'dpk_ad_user_checked_id' => 'nullable',
-            'dpk_ad_user_approved_id' => 'nullable',
+            'adw_ad_user_checked_id' => 'nullable',
+            'adw_ad_user_approved_id' => 'nullable',
             'cost_center_id' => 'nullable',
         ]);
 
@@ -495,12 +501,12 @@ class RequisitionController extends Controller
             $payload['M_PriceList_ID'] = (int) $validated['pricelist_id'];
         if (isset($validated['priority_rule']))
             $payload['PriorityRule'] = (string) $validated['priority_rule'];
-        if (!empty($validated['dpk_ad_user_checked_id']))
-            $payload['DPK_AD_User_Checked_ID'] = (int) $validated['dpk_ad_user_checked_id'];
-        if (!empty($validated['dpk_ad_user_approved_id']))
-            $payload['DPK_AD_User_Approved_ID'] = (int) $validated['dpk_ad_user_approved_id'];
+        if (!empty($validated['adw_ad_user_checked_id']))
+            $payload['ADW_AD_User_Checked_ID'] = (int) $validated['adw_ad_user_checked_id'];
+        if (!empty($validated['adw_ad_user_approved_id']))
+            $payload['ADW_AD_User_Approved_ID'] = (int) $validated['adw_ad_user_approved_id'];
         if (!empty($validated['cost_center_id']))
-            $payload['DPK_Cost_Center_ID'] = (int) $validated['cost_center_id'];
+            $payload['C_CostCenter_ID'] = (int) $validated['cost_center_id'];
 
         if (!empty($validated['date_required'])) {
             $payload['DateRequired'] = \Carbon\Carbon::createFromFormat('m-d-Y', $validated['date_required'])->format('Y-m-d');
@@ -523,9 +529,10 @@ class RequisitionController extends Controller
     }
     public function getProducts(Request $request)
     {
+        $requisitionConfig = config('idempiere.create-pr');
         $search = $request->get('q');
         $page = $request->get('page', 1);
-        $perPage = 25;
+        $perPage = $requisitionConfig['limits']['products_per_page'];
 
         // Get Client ID from session
         $clientId = \Illuminate\Support\Facades\Session::get('idempiere_client');
@@ -614,13 +621,73 @@ class RequisitionController extends Controller
 
     public function process(Request $request)
     {
+        $requisitionConfig = config('idempiere.create-pr');
+        $workflowConfig = $requisitionConfig['workflow'] ?? [];
+        $reactivateAction = $workflowConfig['reactivate_action'] ?? 'RE';
+        $reactivateFrom = $workflowConfig['reactivate_from'] ?? ['CO'];
+        $draftStatus = \App\Models\Idempiere\MRequisition::STATUS_DRAFTED;
+        $completeAction = $workflowConfig['complete_action'] ?? 'CO';
+        $allowedActions = array_values(array_unique(array_merge(
+            $workflowConfig['allowed_actions'] ?? [],
+            [$reactivateAction]
+        )));
+
         $validated = $request->validate([
             'document_id' => 'required',
-            'doc_action' => 'required|in:CO,PR,VO,CL',
+            'doc_action' => 'required|in:' . implode(',', $allowedActions),
         ]);
 
         try {
             $requisitionId = Crypt::decryptString($validated['document_id']);
+
+            if ($validated['doc_action'] === $reactivateAction) {
+                $requisition = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('m_requisition')
+                    ->where('m_requisition_id', $requisitionId)
+                    ->select('m_requisition_id', 'documentno', 'docstatus')
+                    ->first();
+
+                if (!$requisition) {
+                    return response()->json(['message' => 'Requisition not found'], 404);
+                }
+
+                if (!in_array($requisition->docstatus, $reactivateFrom, true)) {
+                    return response()->json([
+                        'message' => 'Only completed requisitions can be re-activated.',
+                    ], 422);
+                }
+
+                \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('m_requisition')
+                    ->where('m_requisition_id', $requisitionId)
+                    ->update([
+                        'docstatus' => $draftStatus,
+                        'docaction' => $completeAction,
+                        'processed' => 'N',
+                        'processing' => 'N',
+                        'processedon' => 0,
+                        'adw_approved_date' => null,
+                        'adw_approve_isapproved' => null,
+                        'adw_checked_date' => null,
+                        'adw_checked_isapproved' => null,
+                        'updated' => now(),
+                    ]);
+
+                \Illuminate\Support\Facades\Log::info('Requisition re-activated via manual bypass', [
+                    'requisition_id' => $requisitionId,
+                    'documentno' => $requisition->documentno,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Document re-activated successfully',
+                    'data' => [
+                        'm_requisition_id' => $requisitionId,
+                        'docstatus' => $draftStatus,
+                        'docaction' => $completeAction,
+                    ],
+                ]);
+            }
 
             $payload = [
                 'doc-action' => $validated['doc_action']
@@ -684,7 +751,8 @@ class RequisitionController extends Controller
                     'rl.qty',
                     'uom.uomsymbol as uom_name',
                     'rl.priceactual',
-                    'rl.description' // Ensure this column exists
+                    'rl.daterequired',
+                    'rl.description'
                 )
                 ->orderBy('rl.line')
                 ->get();
@@ -694,7 +762,7 @@ class RequisitionController extends Controller
             // 1. Prepared By (CreatedBy)
             $preparedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
                 ->where('ad_user_id', $requisition->createdby)
-                ->value('description');
+                ->value('name');
 
             $preparedDate = date('d M Y H:i', strtotime($requisition->updated));
             $preparedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode($requisition->documentno);
@@ -704,16 +772,16 @@ class RequisitionController extends Controller
             $checkedQr = null;
             $checkedDate = 'PENDING';
 
-            if ($requisition->dpk_ad_user_checked_id) {
+            if ($requisition->adw_ad_user_checked_id) {
                 $checkedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
-                    ->where('ad_user_id', $requisition->dpk_ad_user_checked_id)
-                    ->value('description');
+                    ->where('ad_user_id', $requisition->adw_ad_user_checked_id)
+                    ->value('name');
 
                 // Check Status (AP/RE)
-                if ($requisition->dpk_checked_isapproved == 'AP' && $requisition->dpk_checked_date) {
-                    $checkedDate = date('d M Y H:i', strtotime($requisition->dpk_checked_date));
-                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $requisition->dpk_checked_date);
-                } elseif ($requisition->dpk_checked_isapproved == 'RE') {
+                if ($requisition->adw_checked_isapproved == 'AP' && $requisition->adw_checked_date) {
+                    $checkedDate = date('d M Y H:i', strtotime($requisition->adw_checked_date));
+                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $requisition->adw_checked_date);
+                } elseif ($requisition->adw_checked_isapproved == 'RE') {
                     $checkedDate = 'REJECTED';
                 }
             }
@@ -723,16 +791,16 @@ class RequisitionController extends Controller
             $approvedQr = null;
             $approvedDate = 'PENDING';
 
-            if ($requisition->dpk_ad_user_approved_id) {
+            if ($requisition->adw_ad_user_approved_id) {
                 $approvedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
-                    ->where('ad_user_id', $requisition->dpk_ad_user_approved_id)
-                    ->value('description');
+                    ->where('ad_user_id', $requisition->adw_ad_user_approved_id)
+                    ->value('name');
 
                 // Check Status (AP/RE)
-                if ($requisition->dpk_approve_isapproved == 'AP' && $requisition->dpk_approved_date) {
-                    $approvedDate = date('d M Y H:i', strtotime($requisition->dpk_approved_date));
-                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $requisition->dpk_approved_date);
-                } elseif ($requisition->dpk_approve_isapproved == 'RE') {
+                if ($requisition->adw_approve_isapproved == 'AP' && $requisition->adw_approved_date) {
+                    $approvedDate = date('d M Y H:i', strtotime($requisition->adw_approved_date));
+                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $requisition->adw_approved_date);
+                } elseif ($requisition->adw_approve_isapproved == 'RE') {
                     $approvedDate = 'REJECTED';
                 }
             }
@@ -740,6 +808,34 @@ class RequisitionController extends Controller
             $completedActivities = [];
 
 
+
+            // Fetch client name
+            $clientName = null;
+            try {
+                $clientName = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('ad_client')
+                    ->where('ad_client_id', $requisition->ad_client_id)
+                    ->value('name');
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('Client name fetch warning: ' . $e->getMessage());
+            }
+
+            // Fetch org address via c_bpartner → c_bpartner_location → c_location
+            $orgInfo = null;
+            try {
+                $orgInfo = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('c_bpartner as bp')
+                    ->leftJoin('c_bpartner_location as bpl', function ($join) {
+                        $join->on('bp.c_bpartner_id', '=', 'bpl.c_bpartner_id')
+                             ->where('bpl.isactive', '=', 'Y');
+                    })
+                    ->leftJoin('c_location as locbp', 'bpl.c_location_id', '=', 'locbp.c_location_id')
+                    ->where('bp.c_bpartner_id', config('idempiere.client_id'))
+                    ->select('locbp.address1', 'locbp.address2', 'locbp.address3')
+                    ->first();
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('Org info fetch warning: ' . $e->getMessage());
+            }
 
             // Fetch Tenant Logo
             $logoBase64 = null;
@@ -784,7 +880,9 @@ class RequisitionController extends Controller
                 'approvedQr' => $approvedQr,
                 'preparedDate' => $preparedDate,
                 'checkedDate' => $checkedDate,
-                'approvedDate' => $approvedDate
+                'approvedDate' => $approvedDate,
+                'clientName' => $clientName,
+                'orgInfo' => $orgInfo,
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'Requisition-' . str_replace(['/', '\\'], '-', $requisition->documentno) . '.pdf';
@@ -805,15 +903,23 @@ class RequisitionController extends Controller
         try {
             $requisitionId = Crypt::decryptString($validated['document_id']);
 
-            // Use centralized auto-retry wrapper
-            $response = \App\Services\IdempiereService::withAutoRetry(function ($token) use ($requisitionId) {
-                \Illuminate\Support\Facades\Log::info('Deleting requisition', [
-                    'requisition_id' => $requisitionId
-                ]);
+            $linkedOrderLineExists = \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('m_requisitionline as rl')
+                ->join('c_orderline as ol', 'ol.m_requisitionline_id', '=', 'rl.m_requisitionline_id')
+                ->where('rl.m_requisition_id', $requisitionId)
+                ->exists();
 
-                return Http::withToken($token)
-                    ->delete('https://idempiere.dpkgreenlog.id/api/v1/models/m_requisition/' . $requisitionId);
-            });
+            if ($linkedOrderLineExists) {
+                return response()->json([
+                    'message' => 'Cannot delete requisition because one or more requisition lines are already linked to Purchase Order lines.'
+                ], 422);
+            }
+
+            \Illuminate\Support\Facades\Log::info('Deleting requisition', [
+                'requisition_id' => $requisitionId
+            ]);
+
+            $response = $this->idempiereService->delete("models/m_requisition/{$requisitionId}");
 
             \Illuminate\Support\Facades\Log::info('API Response', [
                 'status' => $response->status(),

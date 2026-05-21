@@ -1,12 +1,18 @@
+@php
+    $apPaymentConfig = config('idempiere.ap-payment');
+    $defaultStatuses = $apPaymentConfig['defaults']['status_filters'];
+    $statusOptions = $apPaymentConfig['statuses']['filter_options'];
+@endphp
+
 <div x-data="{
     openFilter: false,
-    filters: { date_start: '', date_end: '', status: ['DR', 'CO'] },
+    filters: { date_start: '', date_end: '', status: @js($defaultStatuses) },
     applyFilters() {
         this.openFilter = false;
         document.dispatchEvent(new CustomEvent('filter-applied', { detail: this.filters }));
     },
     resetFilters() {
-        this.filters = { date_start: '', date_end: '', status: ['DR', 'CO'] };
+        this.filters = { date_start: '', date_end: '', status: @js($defaultStatuses) };
         this.applyFilters();
     }
 }"
@@ -59,22 +65,12 @@
                 <div>
                     <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
                     <div class="flex flex-col gap-2">
-                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input type="checkbox" value="DR" x-model="filters.status" class="rounded border-gray-300 text-brand-500 focus:ring-brand-500">
-                            Draft (DR)
-                        </label>
-                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input type="checkbox" value="CO" x-model="filters.status" class="rounded border-gray-300 text-brand-500 focus:ring-brand-500">
-                            Complete (CO)
-                        </label>
-                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input type="checkbox" value="VO" x-model="filters.status" class="rounded border-gray-300 text-brand-500 focus:ring-brand-500">
-                            Void (VO)
-                        </label>
-                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input type="checkbox" value="RE" x-model="filters.status" class="rounded border-gray-300 text-brand-500 focus:ring-brand-500">
-                            Reverse (RE)
-                        </label>
+                        @foreach($statusOptions as $statusOption)
+                            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                <input type="checkbox" value="{{ $statusOption['value'] }}" x-model="filters.status" class="rounded border-gray-300 text-brand-500 focus:ring-brand-500">
+                                {{ $statusOption['label'] }}
+                            </label>
+                        @endforeach
                     </div>
                 </div>
             </div>

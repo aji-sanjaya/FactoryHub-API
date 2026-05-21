@@ -107,7 +107,12 @@
                     const link = e.target.closest('a[href]');
                     if (link && link.href && link.href.includes('page=')) {
                         e.preventDefault();
-                        fetchData(link.href);
+                        let href = link.getAttribute('href');
+                        @if(app()->environment('production'))
+                        // Force HTTPS to prevent blocked:mixed-content error in production
+                        href = href.replace(/^http:\/\//i, 'https://');
+                        @endif
+                        fetchData(href);
                     }
                 });
             });

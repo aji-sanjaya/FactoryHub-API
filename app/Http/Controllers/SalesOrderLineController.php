@@ -6,6 +6,16 @@ use Illuminate\Http\Request;
 
 class SalesOrderLineController extends Controller
 {
+    private function getSalesOrderConfig(): array
+    {
+        return config('idempiere.sales-order');
+    }
+
+    private function getIdempiereBaseUrl(): string
+    {
+        return rtrim(config('idempiere.api.base_url'), '/');
+    }
+
     public function create(Request $request)
     {
         $documentId = $request->query('document_id');
@@ -40,6 +50,9 @@ class SalesOrderLineController extends Controller
 
     public function store(Request $request)
     {
+        $salesOrderConfig = $this->getSalesOrderConfig();
+        $baseUrl = $this->getIdempiereBaseUrl();
+
         // Strip thousand-separator commas from numeric fields before validation
         $request->merge([
             'qty' => str_replace(',', '', $request->input('qty', '')),
@@ -87,9 +100,9 @@ class SalesOrderLineController extends Controller
             }
 
             // Get max line number from existing lines
-            $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId) {
+                $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $orderId) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->get('https://idempiere.dpkgreenlog.id/api/v1/models/c_order/' . $orderId);
+                    ->get("{$baseUrl}/models/c_order/{$orderId}");
             });
 
             $maxLine = 0;
@@ -114,7 +127,7 @@ class SalesOrderLineController extends Controller
                 return back()->with('error', 'Organization ID not found in order');
             }
 
-            $nextLine = $maxLine + 10;
+            $nextLine = $maxLine + $salesOrderConfig['limits']['line_increment'];
 
             // Prepare payload for iDempiere API
             $payload = [
@@ -140,9 +153,9 @@ class SalesOrderLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $orderId, $payload) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/c_order/' . $orderId, $payload);
+                    ->put("{$baseUrl}/models/c_order/{$orderId}", $payload);
             });
 
             if (!$response->successful()) {
@@ -200,6 +213,8 @@ class SalesOrderLineController extends Controller
 
     public function update(Request $request)
     {
+        $baseUrl = $this->getIdempiereBaseUrl();
+
         // Strip thousand-separator commas from numeric fields before validation
         $request->merge([
             'qty' => str_replace(',', '', $request->input('qty', '')),
@@ -279,9 +294,9 @@ class SalesOrderLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($validated, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $validated, $payload) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/c_orderline/' . $validated['line_id'], $payload);
+                    ->put("{$baseUrl}/models/c_orderline/{$validated['line_id']}", $payload);
             });
 
             if (!$response->successful()) {
@@ -325,6 +340,8 @@ class SalesOrderLineController extends Controller
 
     public function delete(Request $request)
     {
+        $baseUrl = $this->getIdempiereBaseUrl();
+
         $validated = $request->validate([
             'line_ids' => 'required|array',
             'line_ids.*' => 'required|integer',
@@ -345,9 +362,9 @@ class SalesOrderLineController extends Controller
             $errors = [];
 
             foreach ($lineIds as $lineId) {
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($lineId) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $lineId) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->delete('https://idempiere.dpkgreenlog.id/api/v1/models/c_orderline/' . $lineId);
+                    ->delete("{$baseUrl}/models/c_orderline/{$lineId}");
                 });
 
                 if ($response->successful()) {
@@ -468,6 +485,9 @@ class SalesOrderLineController extends Controller
 
     public function import(Request $request)
     {
+        $salesOrderConfig = $this->getSalesOrderConfig();
+        $baseUrl = $this->getIdempiereBaseUrl();
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:5120', // 5MB
             'document_id' => 'required',
@@ -511,7 +531,7 @@ class SalesOrderLineController extends Controller
             $imported = 0;
             $failed = 0;
             $failedRows = []; // Store failed rows with error messages
-            $lineIncrement = 10;
+            $lineIncrement = $salesOrderConfig['limits']['line_increment'];
             $totalRows = 0;
 
             foreach ($rows as $index => $row) {
@@ -601,9 +621,9 @@ class SalesOrderLineController extends Controller
                     ]
                 ];
 
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($baseUrl, $orderId, $payload) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->put('https://idempiere.dpkgreenlog.id/api/v1/models/c_order/' . $orderId, $payload);
+                    ->put("{$baseUrl}/models/c_order/{$orderId}", $payload);
                 });
 
                 if ($response->successful()) {

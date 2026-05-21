@@ -21,6 +21,10 @@ class ApprovalPoController extends Controller
 
     public function index(Request $request)
     {
+        $approvalConfig = config('idempiere.approval-po');
+        $statusConfig = $approvalConfig['statuses'];
+        $workflowConfig = $approvalConfig['workflow'];
+
         // Check Authentication
         if (!Session::has('api_token')) {
             return redirect()->route('signin');
@@ -54,16 +58,16 @@ class ApprovalPoController extends Controller
                 ->join('ad_wf_activity as a', 'a.ad_wf_process_id', '=', 'p.ad_wf_process_id')
                 ->join('ad_wf_responsible as wr', 'wr.ad_wf_responsible_id', '=', 'a.ad_wf_responsible_id')
                 ->whereColumn('p.record_id', 'c_order.c_order_id')
-                ->where('p.ad_table_id', 259) // C_Order
-                ->where('a.wfstate', 'OS')
+                ->where('p.ad_table_id', $workflowConfig['table_id'])
+                ->where('a.wfstate', $workflowConfig['open_state'])
                 ->where('a.isactive', 'Y')
                 // Check if responsibility is assigned to current Role
                 ->where('wr.ad_role_id', $roleId)
                 ->selectRaw('COUNT(*)')
         ]);
 
-        $query->where('issotrx', 'N') // Purchase Order
-            ->whereNotIn('docstatus', ['DR', 'CL']); // Exclude Draft and Closed
+        $query->where('issotrx', $approvalConfig['defaults']['is_so_trx'])
+            ->whereNotIn('docstatus', $statusConfig['exclude_from_list']);
 
         if ($clientId) {
             $query->where('c_order.ad_client_id', $clientId);
@@ -78,7 +82,7 @@ class ApprovalPoController extends Controller
         $startOfMonth = now()->startOfMonth()->format('Y-m-d');
         $endOfMonth = now()->endOfMonth()->format('Y-m-d');
 
-        $statsQuery = COrder::query()->where('issotrx', 'N');
+        $statsQuery = COrder::query()->where('issotrx', $approvalConfig['defaults']['is_so_trx']);
         if ($clientId)
             $statsQuery->where('ad_client_id', $clientId);
         if ($orgId && $orgId > 0)
@@ -87,18 +91,16 @@ class ApprovalPoController extends Controller
         $statsBase = clone $statsQuery;
         $statsBase->whereBetween('dateordered', [$startOfMonth, $endOfMonth]);
 
-        $countPending = (clone $statsBase)->where('docstatus', 'IP')->count();
-        $countApproved = (clone $statsBase)->whereIn('docstatus', ['CO', 'CL'])->count();
-        $countRejected = (clone $statsBase)->where('docstatus', 'VO')->count();
+        $countPending = (clone $statsBase)->where('docstatus', $statusConfig['pending'])->count();
+        $countApproved = (clone $statsBase)->whereIn('docstatus', $statusConfig['approved'])->count();
+        $countRejected = (clone $statsBase)->where('docstatus', $statusConfig['rejected'])->count();
         $countAll = $statsBase->count();
 
         // Filtering List
-        $status = $request->get('status', 'IP');
-        if ($status !== 'ALL') {
-            if ($status === 'APPROVED') {
-                $query->whereIn('c_order.docstatus', ['CO', 'CL']);
-            } elseif ($status === 'REJECTED') {
-                $query->where('c_order.docstatus', 'VO');
+        $status = $request->get('status', $approvalConfig['defaults']['status_filter']);
+        if ($status !== $approvalConfig['defaults']['all_filter_value']) {
+            if (isset($statusConfig['filter_aliases'][$status])) {
+                $query->whereIn('c_order.docstatus', $statusConfig['filter_aliases'][$status]);
             } else {
                 $query->where('c_order.docstatus', $status);
             }
@@ -122,7 +124,7 @@ class ApprovalPoController extends Controller
             $query->where('c_order.c_bpartner_id', $request->c_bpartner_id);
         }
 
-        $orders = $query->orderBy('c_order.dateordered', 'desc')->paginate(10);
+        $orders = $query->orderBy('c_order.dateordered', 'desc')->paginate($approvalConfig['limits']['list_per_page']);
 
         if ($request->ajax()) {
             return view('pages.approval-po.partials.table', compact('orders'));
@@ -140,10 +142,11 @@ class ApprovalPoController extends Controller
 
     public function getSuppliers(Request $request)
     {
+        $approvalConfig = config('idempiere.approval-po');
         $clientId = Session::get('idempiere_client');
         $search = $request->term;
         $page = $request->page ?? 1;
-        $perPage = 10;
+        $perPage = $approvalConfig['limits']['select2_per_page'];
 
         $query = DB::connection('idempiere')->table('c_bpartner')
             ->where('isactive', 'Y')
@@ -165,6 +168,8 @@ class ApprovalPoController extends Controller
 
     public function show($id)
     {
+        $approvalConfig = config('idempiere.approval-po');
+
         // Decrypt ID
         try {
             $decryptedId = Crypt::decryptString($id);
@@ -214,8 +219,8 @@ class ApprovalPoController extends Controller
             ->join('ad_wf_activity as a', 'a.ad_wf_process_id', '=', 'p.ad_wf_process_id')
             ->join('ad_wf_responsible as wr', 'wr.ad_wf_responsible_id', '=', 'a.ad_wf_responsible_id')
             ->where('p.record_id', $order->c_order_id)
-            ->where('p.ad_table_id', 259) // C_Order
-            ->where('a.wfstate', 'OS')
+            ->where('p.ad_table_id', $approvalConfig['workflow']['table_id'])
+            ->where('a.wfstate', $approvalConfig['workflow']['open_state'])
             ->where('a.isactive', 'Y')
             ->where('wr.ad_role_id', $roleId)
             ->exists();
@@ -231,14 +236,22 @@ class ApprovalPoController extends Controller
 
     public function process(Request $request, $id)
     {
+        $approvalConfig = config('idempiere.approval-po');
+        $workflowConfig = $approvalConfig['workflow'];
+
         try {
             $decryptedId = Crypt::decryptString($id);
         } catch (\Exception $e) {
             $decryptedId = $id;
         }
 
-        $action = $request->input('action');
-        $comment = $request->input('comment');
+        $validated = $request->validate([
+            'action' => 'required|in:' . implode(',', $workflowConfig['allowed_actions']),
+            'comment' => 'nullable|string',
+        ]);
+
+        $action = $validated['action'];
+        $comment = $validated['comment'] ?? null;
 
         // Fetch the AD_WF_Activity_ID for this record and user/role
         $roleId = Session::get('idempiere_role');
@@ -248,8 +261,8 @@ class ApprovalPoController extends Controller
             ->join('ad_wf_activity as a', 'a.ad_wf_process_id', '=', 'p.ad_wf_process_id')
             ->join('ad_wf_responsible as wr', 'wr.ad_wf_responsible_id', '=', 'a.ad_wf_responsible_id')
             ->where('p.record_id', $decryptedId) // C_Order_ID
-            ->where('p.ad_table_id', 259) // C_Order
-            ->where('a.wfstate', 'OS')
+            ->where('p.ad_table_id', $workflowConfig['table_id'])
+            ->where('a.wfstate', $workflowConfig['open_state'])
             ->where('a.isactive', 'Y')
             ->where('wr.ad_role_id', $roleId)
             ->select('a.ad_wf_activity_id')
@@ -258,12 +271,12 @@ class ApprovalPoController extends Controller
         if (!$activity) {
             return response()->json([
                 'success' => false,
-                'message' => 'No active workflow activity found for your role on this document.'
+                'message' => $workflowConfig['no_activity_message']
             ], 404);
         }
 
         $activityId = $activity->ad_wf_activity_id;
-        $endpoint = $action === 'APPROVE' ? "workflow/approve/{$activityId}" : "workflow/reject/{$activityId}";
+        $endpoint = ($workflowConfig['endpoints'][$action] ?? $workflowConfig['endpoints']['REJECT']) . "/{$activityId}";
 
         // Payload
         $payload = [
@@ -283,32 +296,32 @@ class ApprovalPoController extends Controller
                 $userId = $userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? 0;
 
                 // Determine Status Code
-                $statusCode = ($action === 'APPROVE') ? 'AP' : 'RE';
+                $statusCode = $workflowConfig['custom_column_statuses'][$action] ?? null;
                 $now = date('Y-m-d H:i:s');
 
                 // Check Current State to decide Step 1 vs Step 2
                 $order = DB::connection('idempiere')
                     ->table('c_order')
                     ->where('c_order_id', $decryptedId)
-                    ->select('dpk_checked_isapproved', 'dpk_checked_date')
+                    ->select('adw_checked_isapproved', 'adw_checked_date')
                     ->first();
 
                 $updateData = [];
 
                 // Logic matching PurchaseOrderController print/signature flow
-                if (!$order || is_null($order->dpk_checked_date)) {
+                if (!$order || is_null($order->adw_checked_date)) {
                     // Step 1: Checked
                     $updateData = [
-                        'dpk_ad_user_checked_id' => $userId,
-                        'dpk_checked_date' => $now,
-                        'dpk_checked_isapproved' => $statusCode
+                        'adw_ad_user_checked_id' => $userId,
+                        'adw_checked_date' => $now,
+                        'adw_checked_isapproved' => $statusCode
                     ];
                 } else {
                     // Step 2: Approved
                     $updateData = [
-                        'dpk_ad_user_approved_id' => $userId,
-                        'dpk_approved_date' => $now,
-                        'dpk_approve_isapproved' => $statusCode
+                        'adw_ad_user_approved_id' => $userId,
+                        'adw_approved_date' => $now,
+                        'adw_approve_isapproved' => $statusCode
                     ];
                 }
 
@@ -325,7 +338,7 @@ class ApprovalPoController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => $action === 'APPROVE' ? 'Approved successfully.' : 'Rejected successfully.'
+                'message' => $workflowConfig['success_messages'][$action] ?? 'Action completed successfully.'
             ]);
         }
 

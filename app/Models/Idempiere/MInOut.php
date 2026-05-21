@@ -33,12 +33,12 @@ class MInOut extends Model
         'description',
         'c_order_id',
         'salesrep_id',
-        'dpk_ad_user_checked_id',
-        'dpk_ad_user_approved_id',
-        'dpk_checked_date',
-        'dpk_approved_date',
-        'dpk_checked_isapproved',
-        'dpk_approve_isapproved',
+        'adw_ad_user_checked_id',
+        'adw_ad_user_approved_id',
+        'adw_checked_date',
+        'adw_approved_date',
+        'adw_checked_isapproved',
+        'adw_approve_isapproved',
     ];
 
     public function getStatusLabelAttribute()

@@ -9,9 +9,10 @@
 </style>
 <div class="px-8 py-6 max-w-7xl mx-auto">
     @php
+        $materialReceiptConfig = $materialReceiptConfig ?? config('idempiere.create-gr');
         $isNew      = is_null($receipt);
-        $isReadOnly = !$isNew && in_array($receipt->docstatus, ['CO', 'CL', 'VO', 'RE']);
-        $isDraft    = !$isNew && $receipt->docstatus === 'DR';
+        $isReadOnly = !$isNew && in_array($receipt->docstatus, $materialReceiptConfig['statuses']['read_only'] ?? [], true);
+        $isDraft    = !$isNew && in_array($receipt->docstatus, $materialReceiptConfig['statuses']['draft'] ?? ['DR'], true);
         $cs         = $receipt->docstatus ?? 'DR';
 
         // Resolve display names from collections
@@ -24,7 +25,7 @@
         $displayWarehouse= !$isNew ? $resolveText($warehouses,     $receipt->m_warehouse_id)           : '';
         $displayProject  = !$isNew && $receipt->c_project_id ? $resolveText($projects, $receipt->c_project_id) : '-';
 
-        $defaultDocTypeId   = 1000014;
+        $defaultDocTypeId   = $materialReceiptConfig['doc_types']['material_receipt'];
         $defaultWarehouseId = collect($warehouses)->sortBy(fn($w) => (int)$w->id)->first()?->id;
 
         // Vendor is locked when receipt already has lines
@@ -81,7 +82,7 @@
                                 class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors">
                         @else
                             <select id="doc_type_id" name="doc_type_id" class="w-full text-base" {{ $isReadOnly ? 'disabled' : '' }}>
-                                <option value="1000014" selected>Material Receipt</option>
+                                <option value="{{ $materialReceiptConfig['doc_types']['material_receipt'] }}" selected>Material Receipt</option>
                             </select>
                         @endif
                     </div>

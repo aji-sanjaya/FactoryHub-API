@@ -1,9 +1,12 @@
 {{-- Lines List Container --}}
 <div id="lines-list-container" class="space-y-6">
     @php
-        $isReadOnly = !is_null($invoice) && in_array($invoice->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $apInvoiceConfig = $apInvoiceConfig ?? config('idempiere.ap-invoice');
+        $isReadOnly = !is_null($invoice) && in_array($invoice->docstatus, $apInvoiceConfig['statuses']['read_only'] ?? [], true);
         $canEdit = !$isReadOnly;
         $encDocId = $docIdParam;
+        $linePerPageOptions = $apInvoiceConfig['limits']['line_per_page_options'] ?? [10, 25, 50];
+        $defaultLinePerPage = $apInvoiceConfig['limits']['line_default_per_page'] ?? 10;
     @endphp
 
     {{-- Table Controls --}}
@@ -15,9 +18,12 @@
             <div class="relative">
                 <select name="per_page" onchange="handlePerPageLines(this.value)"
                     class="border border-gray-200 dark:border-gray-800 h-10 pl-3 pr-8 text-sm bg-gray-50 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300">
-                    <option value="10" {{ request('per_page') == 10 ? 'selected' : '' }}>10 rows</option>
-                    <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25 rows</option>
-                    <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50 rows</option>
+                    @php
+                        $selectedPerPage = (int) request('per_page', $defaultLinePerPage);
+                    @endphp
+                    @foreach($linePerPageOptions as $linePerPageOption)
+                        <option value="{{ $linePerPageOption }}" {{ $selectedPerPage === (int) $linePerPageOption ? 'selected' : '' }}>{{ $linePerPageOption }} rows</option>
+                    @endforeach
                 </select>
             </div>
         </div>
@@ -97,6 +103,14 @@
                         <th
                             class="min-w-[140px] px-6 py-4 font-medium text-right text-gray-500 text-theme-sm dark:text-gray-400">
                             Net Amount</th>
+                        <th class="min-w-[80px] px-4 py-3 font-medium text-center text-gray-500 text-theme-sm dark:text-gray-400">
+                            Is WHT</th>
+                        <th
+                            class="min-w-[100px] px-6 py-4 font-medium text-right text-gray-500 text-theme-sm dark:text-gray-400">
+                            WHT Rate</th>
+                        <th
+                            class="min-w-[130px] px-6 py-4 font-medium text-right text-gray-500 text-theme-sm dark:text-gray-400">
+                            WHT Amount</th>
                         <th class="min-w-[140px] px-6 py-4 font-medium text-gray-500 text-theme-sm dark:text-gray-400">
                             GR Ref</th>
                         @if($canEdit)
@@ -146,6 +160,27 @@
                                 class="px-6 py-4 whitespace-nowrap text-theme-xs text-right font-bold text-gray-900 dark:text-white font-mono bg-brand-50/10 dark:bg-brand-900/10">
                                 {{ number_format($line->net_amount, 2) }}
                             </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-center">
+                                @if(($line->is_withholding ?? 'N') === 'Y')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Yes</span>
+                                @else
+                                    <span class="text-gray-400 text-theme-xs">-</span>
+                                @endif
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-theme-xs text-right text-gray-600 dark:text-gray-400 font-mono">
+                                @if(($line->is_withholding ?? 'N') === 'Y')
+                                    {{ number_format($line->withholding_rate ?? 0, 2) }}%
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-theme-xs text-right font-medium text-orange-600 dark:text-orange-400 font-mono">
+                                @if(($line->is_withholding ?? 'N') === 'Y')
+                                    ({{ number_format($line->withholding_amount ?? 0, 2) }})
+                                @else
+                                    -
+                                @endif
+                            </td>
                             <td
                                 class="px-6 py-4 whitespace-nowrap text-theme-xs text-gray-500 dark:text-gray-400 font-mono">
                                 {{ $line->gr_documentno ?? '-' }}
@@ -154,7 +189,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex items-center justify-end gap-1">
                                         <button type="button"
-                                            onclick="editLine({{ $line->c_invoiceline_id }}, '{{ addslashes($line->product_name ?? '') }}', {{ $line->m_product_id ?? 'null' }}, {{ $line->qty }}, {{ $line->unit_price }}, '{{ addslashes($line->description ?? '') }}', {{ $line->line }}, '{{ $line->uom_symbol ?? $line->uom_name ?? '' }}', {{ $line->m_inoutline_id ?? 'null' }}, '{{ addslashes($line->receipt_no ?? '') }}', '{{ addslashes($line->receipt_poref ?? '') }}', '{{ $line->receipt_date ? \Carbon\Carbon::parse($line->receipt_date)->format('d M Y') : '' }}')"
+                                            onclick="editLine({{ $line->c_invoiceline_id }}, '{{ addslashes($line->product_name ?? '') }}', {{ $line->m_product_id ?? 'null' }}, {{ $line->qty }}, {{ $line->unit_price }}, '{{ addslashes($line->description ?? '') }}', {{ $line->line }}, '{{ $line->uom_symbol ?? $line->uom_name ?? '' }}', {{ $line->m_inoutline_id ?? 'null' }}, '{{ addslashes($line->receipt_no ?? '') }}', '{{ addslashes($line->receipt_poref ?? '') }}', '{{ $line->receipt_date ? \Carbon\Carbon::parse($line->receipt_date)->format('d M Y') : '' }}', {{ ($line->is_withholding ?? 'N') === 'Y' ? 'true' : 'false' }}, {{ $line->withholding_rate ?? 2 }})"
                                             class="btn btn-sm bg-yellow-100 me-1 p-2 rounded-sm hover:bg-yellow-200 transition-colors"
                                             title="Edit">
                                             <svg class="w-4 h-4 text-yellow-700" fill="none" stroke="currentColor"
@@ -178,7 +213,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $canEdit ? 9 : 7 }}" class="px-6 py-16 text-center">
+                            <td colspan="{{ $canEdit ? 12 : 10 }}" class="px-6 py-16 text-center">
                                 <div class="flex flex-col items-center justify-center max-w-sm mx-auto">
                                     <div
                                         class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 dark:bg-gray-800">
@@ -412,7 +447,7 @@
                             </label>
                             <div class="relative">
                                 <input type="text" id="line_qty" name="qty" required
-                                    onkeypress="return /[0-9.]/.test(event.key)" onblur="formatNumber(this)"
+                                    onkeypress="return /[0-9.]/.test(event.key)" onblur="formatNumber(this); recalcWithholding()"
                                     class="block w-full rounded-lg border-gray-300 pl-4 pr-16 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white sm:text-sm h-11 shadow-sm"
                                     placeholder="0.00">
                                 <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
@@ -431,7 +466,7 @@
                                     <span class="text-gray-500 sm:text-sm">Rp</span>
                                 </div>
                                 <input type="text" id="line_price" name="price" onkeypress="return /[0-9.]/.test(event.key)"
-                                    onblur="formatNumber(this)"
+                                    onblur="formatNumber(this); recalcWithholding()"
                                     class="block w-full rounded-lg border-gray-300 pl-10 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white sm:text-sm h-11 shadow-sm"
                                     placeholder="0.00">
                             </div>
@@ -445,6 +480,50 @@
                         <textarea id="line_description" name="description" rows="3"
                             class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-700 dark:border-gray-700 dark:text-white sm:text-sm p-3 placeholder-gray-400"
                             placeholder="Add any additional details or specifications..."></textarea>
+                    </div>
+
+                    {{-- Withholding Tax (PPh23) --}}
+                    <div class="border border-orange-100 dark:border-orange-900/40 rounded-lg p-4 space-y-4 bg-orange-50/40 dark:bg-orange-900/10">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="is_withholding" name="is_withholding" value="1"
+                                onchange="onWithholdingToggle(this.checked)"
+                                class="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-400 cursor-pointer">
+                            <label for="is_withholding" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                                Is Withholding Tax
+                                <span class="ml-1 text-xs font-normal text-orange-500">(PPh23)</span>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {{-- Withholding Rate --}}
+                            <div>
+                                <label for="withholding_rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Withholding Rate (%)
+                                </label>
+                                <div class="relative">
+                                    <input type="number" id="withholding_rate" name="withholding_rate"
+                                        value="2" min="0" step="0.01" disabled
+                                        oninput="recalcWithholding()"
+                                        class="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 dark:bg-gray-700 dark:border-gray-700 dark:text-white sm:text-sm pr-8 h-11 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400 dark:disabled:bg-gray-800 transition-colors">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-400 text-sm">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {{-- Withholding Amount --}}
+                            <div>
+                                <label for="withholding_amount_display" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Withholding Amount
+                                    <span class="text-xs text-gray-400 font-normal ml-1">(auto)</span>
+                                </label>
+                                <div class="relative">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-400 text-sm">Rp</span>
+                                    </div>
+                                    <input type="text" id="withholding_amount_display" readonly placeholder="0.00"
+                                        class="w-full rounded-lg border-gray-200 bg-gray-50 h-11 pl-10 cursor-not-allowed dark:bg-gray-800/50 dark:border-gray-700 dark:text-orange-400 text-orange-600 sm:text-sm font-medium">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -549,6 +628,11 @@
             window.showCreateLineForm = function () {
                 document.getElementById('line_id').value = '';
                 document.getElementById('createLineForm').reset();
+                // Reset WHT fields
+                document.getElementById('is_withholding').checked = false;
+                document.getElementById('withholding_rate').value = 2;
+                document.getElementById('withholding_rate').disabled = true;
+                document.getElementById('withholding_amount_display').value = '';
                 // Clear any lingering receipt state
                 if (typeof clearReceiptLink === 'function') clearReceiptLink();
                 if (typeof $ !== 'undefined') {
@@ -584,7 +668,7 @@
                 }
             };
 
-            window.editLine = function (lineId, productName, productId, qty, price, desc, lineNo, uomName, mInOutLineId, receiptNo, poRef, receiptDate) {
+            window.editLine = function (lineId, productName, productId, qty, price, desc, lineNo, uomName, mInOutLineId, receiptNo, poRef, receiptDate, isWithholding, withholdingRate) {
                 showCreateLineForm();
                 window.isEditingLine = true;
                 document.getElementById('line_id').value = lineId;
@@ -622,6 +706,12 @@
                 document.getElementById('line_qty').value = parseFloat(qty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 document.getElementById('line_price').value = parseFloat(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 document.getElementById('line_description').value = desc || '';
+                // Restore WHT state
+                const whtChecked = !!isWithholding;
+                document.getElementById('is_withholding').checked = whtChecked;
+                document.getElementById('withholding_rate').disabled = !whtChecked;
+                document.getElementById('withholding_rate').value = withholdingRate ?? 2;
+                recalcWithholding();
                 const title = document.querySelector('#lineFormPanel');
                 if (title) title.childNodes[title.childNodes.length - 1].textContent = 'Edit Invoice Line';
             };
@@ -639,6 +729,8 @@
                     m_product_id: productId,
                     qty: rawData.qty ? rawData.qty.replace(/,/g, '') : '',
                     unit_price: rawData.price ? rawData.price.replace(/,/g, '') : '0',
+                    is_withholding: document.getElementById('is_withholding').checked ? '1' : '0',
+                    withholding_rate: document.getElementById('withholding_rate').value || '0',
                 };
 
                 if (!data.m_product_id) {
@@ -662,7 +754,10 @@
                 const method = lineId ? 'put' : 'post';
 
                 axios[method](url, data)
-                    .then(() => { hideCreateLineForm(); loadTabContent('lines'); })
+                    .then(res => {
+                        updateHeaderTotals(res.data);
+                        hideCreateLineForm(); loadTabContent('lines');
+                    })
                     .catch(err => {
                         Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message || 'Failed to save line.', confirmButtonColor: '#4f46e5' });
                         if (btn) { btn.innerHTML = origHtml; btn.disabled = false; }
@@ -690,6 +785,7 @@
             function performDelete(lineIds) {
                 axios.delete(DEL_URL, { data: { line_ids: lineIds, document_id: DOC_ID, _token: CSRF } })
                     .then(res => {
+                        updateHeaderTotals(res.data);
                         Swal.fire({ icon: 'success', title: 'Deleted!', text: res.data?.message || 'Lines deleted.', confirmButtonColor: '#4f46e5', timer: 2000 });
                         loadTabContent('lines');
                     })
@@ -721,6 +817,36 @@
             window.handlePerPageLines = function (perPage) {
                 const q = document.getElementById('q_lines')?.value || '';
                 loadTabContent('lines', { per_page: perPage, q_lines: q, page: 1 });
+            };
+
+            function updateHeaderTotals(data) {
+                if (!data) return;
+                const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+                set('txt_total_lines',      data.total_lines);
+                set('txt_tax_amount',       data.tax_amount);
+                set('txt_withholding_total',data.withholding_total);
+                set('txt_grand_total',      data.grand_total_net);
+            }
+
+            window.onWithholdingToggle = function (checked) {
+                const rateEl = document.getElementById('withholding_rate');
+                rateEl.disabled = !checked;
+                if (!checked) {
+                    document.getElementById('withholding_amount_display').value = '';
+                } else {
+                    recalcWithholding();
+                }
+            };
+
+            window.recalcWithholding = function () {
+                const checked = document.getElementById('is_withholding').checked;
+                if (!checked) { document.getElementById('withholding_amount_display').value = ''; return; }
+                const qty = parseFloat((document.getElementById('line_qty').value || '0').replace(/,/g, '')) || 0;
+                const price = parseFloat((document.getElementById('line_price').value || '0').replace(/,/g, '')) || 0;
+                const rate = parseFloat(document.getElementById('withholding_rate').value || '0') || 0;
+                const netAmt = qty * price;
+                const whtAmt = netAmt * rate / 100;
+                document.getElementById('withholding_amount_display').value = whtAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
 
             window.formatNumber = function (input) {

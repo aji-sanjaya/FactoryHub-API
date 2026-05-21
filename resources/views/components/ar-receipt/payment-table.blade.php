@@ -1,5 +1,11 @@
 @props(['payments'])
 
+@php
+    $arReceiptConfig = config('idempiere.ar-receipt');
+    $paymentRuleLabels = collect($arReceiptConfig['payment_rules'] ?? [])->pluck('text', 'id')->all();
+    $statusLabels = $arReceiptConfig['statuses']['labels'] ?? [];
+@endphp
+
 <div class="overflow-hidden rounded-b-2xl border border-t-0 border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
     <div class="max-w-full overflow-x-auto">
         <table class="w-full table-auto">
@@ -23,17 +29,10 @@
                             ->where('c_bpartner_id', $payment->c_bpartner_id)
                             ->value('name');
 
-                        $paymentRuleLabel = match($payment->paymentrule ?? '') {
-                            'T' => 'Transfer', 'K' => 'Cash', 'S' => 'Check',
-                            'P' => 'On Credit', 'D' => 'Direct Debit', 'C' => 'Credit Card',
-                            default => $payment->paymentrule ?? '-',
-                        };
+                        $paymentRuleCode = $payment->tendertype ?? $payment->paymentrule ?? '';
+                        $paymentRuleLabel = $paymentRuleLabels[$paymentRuleCode] ?? ($paymentRuleCode ?: '-');
 
-                        $statusLabel = match($payment->docstatus) {
-                            'DR' => 'Draft', 'IP' => 'In Progress', 'CO' => 'Completed',
-                            'CL' => 'Closed', 'VO' => 'Voided', 'RE' => 'Reversed',
-                            'NA' => 'Not Approved', 'AP' => 'Approved', default => $payment->docstatus,
-                        };
+                        $statusLabel = $statusLabels[$payment->docstatus] ?? $payment->docstatus;
 
                         $statusClass = match($statusLabel) {
                             'Completed', 'Closed'         => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',

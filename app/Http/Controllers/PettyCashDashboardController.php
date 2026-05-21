@@ -27,7 +27,7 @@ class PettyCashDashboardController extends Controller
 
         // Total request value
         $totalRequest = DB::connection('idempiere')
-            ->table('dpk_pettycash_request')
+            ->table('adw_pettycash_request')
             ->where('ad_client_id', $clientId)
             ->where('isactive', 'Y')
             ->whereIn('docstatus', ['CO', 'CL'])
@@ -36,7 +36,7 @@ class PettyCashDashboardController extends Controller
 
         // Total closing value
         $totalClosing = DB::connection('idempiere')
-            ->table('dpk_pettycash_closing')
+            ->table('adw_pettycash_closing')
             ->where('ad_client_id', $clientId)
             ->where('isactive', 'Y')
             ->whereIn('docstatus', ['CO', 'CL'])
@@ -48,7 +48,7 @@ class PettyCashDashboardController extends Controller
 
         // Pending Requests (Not Closed)
         $pendingRequests = DB::connection('idempiere')
-            ->table('dpk_pettycash_request')
+            ->table('adw_pettycash_request')
             ->where('ad_client_id', $clientId)
             ->where('isactive', 'Y')
             ->whereNotIn('docstatus', ['CL', 'VO', 'RE'])
@@ -76,7 +76,7 @@ class PettyCashDashboardController extends Controller
 
             // Requests in that month
             $reqSum = DB::connection('idempiere')
-                ->table('dpk_pettycash_request')
+                ->table('adw_pettycash_request')
                 ->where('ad_client_id', $clientId)
                 ->where('isactive', 'Y')
                 ->whereIn('docstatus', ['CO', 'CL'])
@@ -86,7 +86,7 @@ class PettyCashDashboardController extends Controller
 
             // Closings in that month
             $closeSum = DB::connection('idempiere')
-                ->table('dpk_pettycash_closing')
+                ->table('adw_pettycash_closing')
                 ->where('ad_client_id', $clientId)
                 ->where('isactive', 'Y')
                 ->whereIn('docstatus', ['CO', 'CL'])
@@ -103,14 +103,14 @@ class PettyCashDashboardController extends Controller
 
         // Recent Activities (Combine requesting and closings) in the selected month
         $recentReqs = DB::connection('idempiere')
-            ->table('dpk_pettycash_request')
+            ->table('adw_pettycash_request')
             ->selectRaw("'Request' as type, documentno, datetrx as date, docstatus, totallines as amount")
             ->where('ad_client_id', $clientId)
             ->where('isactive', 'Y')
             ->whereBetween('datetrx', [$dateStart, $dateEnd]);
 
         $recentActivities = DB::connection('idempiere')
-            ->table('dpk_pettycash_closing')
+            ->table('adw_pettycash_closing')
             ->selectRaw("'Closing' as type, documentno, datetrx as date, docstatus, totallines as amount")
             ->where('ad_client_id', $clientId)
             ->where('isactive', 'Y')
@@ -131,14 +131,14 @@ class PettyCashDashboardController extends Controller
         $dateEnd = Carbon::createFromFormat('Y-m', $selectedMonth)->endOfMonth();
 
         $recentReqs = DB::connection('idempiere')
-            ->table('dpk_pettycash_request')
+            ->table('adw_pettycash_request')
             ->selectRaw("'Request' as type, documentno, datetrx as date, docstatus, totallines as amount")
             ->where('ad_client_id', $clientId)
             ->where('isactive', 'Y')
             ->whereBetween('datetrx', [$dateStart, $dateEnd]);
 
         $data = DB::connection('idempiere')
-            ->table('dpk_pettycash_closing')
+            ->table('adw_pettycash_closing')
             ->selectRaw("'Closing' as type, documentno, datetrx as date, docstatus, totallines as amount")
             ->where('ad_client_id', $clientId)
             ->where('isactive', 'Y')

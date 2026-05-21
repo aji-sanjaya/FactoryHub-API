@@ -48,9 +48,14 @@
             </button>
 
             <!-- Logo (mobile only) -->
-            <a href="/" class="xl:hidden">
-                <img class="dark:hidden" src="/images/logo/logo.svg" alt="Logo" />
-                <img class="hidden dark:block" src="/images/logo/logo-dark.svg" alt="Logo" />
+            <a href="/" class="xl:hidden flex items-center gap-2">
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 shadow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L4.09 12.11a1 1 0 0 0 .77 1.64H11l-1 8 8.91-10.11a1 1 0 0 0-.77-1.64H13l1-8Z"
+                            fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-bold tracking-wide text-gray-900 dark:text-white">FactoryHub</span>
             </a>
 
             <!-- Application Menu Toggle (mobile only) -->
@@ -91,7 +96,16 @@
         <!-- Application Menu (mobile) and Right Side Actions (desktop) -->
         <div :class="isApplicationMenuOpen ? 'flex' : 'max-xl:hidden'"
             class="items-center justify-between w-full gap-4 px-5 py-4 xl:flex shadow-theme-md xl:justify-end xl:px-0 xl:shadow-none">
-            <div class="flex items-center gap-2 2xsm:gap-3">
+            <div class="flex items-center gap-3">
+                <a
+                    href="{{ route('dashboard') }}"
+                    aria-label="Home"
+                    class="relative flex h-11 w-11 items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full hover:text-dark-900 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white">
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path d="M10.707 1.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 10h1v6a1 1 0 001 1h3.5a.5.5 0 00.5-.5V13a1 1 0 011-1h0a1 1 0 011 1v3.5a.5.5 0 00.5.5H15a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
+                    </svg>
+                </a>
+
                 <!-- Theme Toggle Button -->
                 <button
                     class="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full hover:text-dark-900 h-11 w-11 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
@@ -113,10 +127,10 @@
 
                 <!-- Notification Dropdown -->
                 <x-header.notification-dropdown />
-            </div>
 
-            <!-- User Dropdown -->
-            <x-header.user-dropdown />
+                <!-- User Dropdown -->
+                <x-header.user-dropdown />
+            </div>
         </div>
     </div>
 </header>

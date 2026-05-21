@@ -7,16 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 class DpkPettycashClosingLine extends Model
 {
     protected $connection = 'idempiere';
-    protected $table = 'dpk_pettycash_closingline';
-    protected $primaryKey = 'dpk_pettycash_closingline_id';
+    protected $table = 'adw_pettycash_closingline';
+    protected $primaryKey = 'adw_pettycash_closingline_id';
     public $timestamps = false;
 
     protected $fillable = [
         'ad_client_id',
         'ad_org_id',
-        'dpk_pettycash_closing_id',
-        'dpk_pettycash_request_id',
-        'dpk_pettycash_requestline_id',
+        'adw_pettycash_closing_id',
+        'adw_pettycash_request_id',
+        'adw_pettycash_requestline_id',
         'name',
         'description',
         'amount',
@@ -38,7 +38,7 @@ class DpkPettycashClosingLine extends Model
      */
     public function header()
     {
-        return $this->belongsTo(DpkPettycashClosing::class, 'dpk_pettycash_closing_id', 'dpk_pettycash_closing_id');
+        return $this->belongsTo(DpkPettycashClosing::class, 'adw_pettycash_closing_id', 'adw_pettycash_closing_id');
     }
 
     /**
@@ -46,6 +46,6 @@ class DpkPettycashClosingLine extends Model
      */
     public function requestLine()
     {
-        return $this->belongsTo(DpkPettycashRequestLine::class, 'dpk_pettycash_requestline_id', 'dpk_pettycash_requestline_id');
+        return $this->belongsTo(DpkPettycashRequestLine::class, 'adw_pettycash_requestline_id', 'adw_pettycash_requestline_id');
     }
 }

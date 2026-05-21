@@ -165,15 +165,15 @@ class PettyCashClosingController extends Controller
         // Fetch Petty Cash Requests for linking
         // Ideally only requests that are Completed or Closed and haven't been fully closed out yet
         $pettyCashRequestsQuery = "
-            SELECT dpk_pettycash_request_id AS id, documentno || ' - ' || COALESCE(description, '') AS text
-            FROM dpk_pettycash_request
+            SELECT adw_pettycash_request_id AS id, documentno || ' - ' || COALESCE(description, '') AS text
+            FROM adw_pettycash_request
             WHERE isactive = 'Y' AND ad_client_id = ? AND (docstatus = 'CO'";
 
         $queryParams = [$clientId];
 
-        if ($requestData && $requestData->dpk_pettycash_request_id) {
-            $pettyCashRequestsQuery .= " OR dpk_pettycash_request_id = ?)";
-            $queryParams[] = $requestData->dpk_pettycash_request_id;
+        if ($requestData && $requestData->adw_pettycash_request_id) {
+            $pettyCashRequestsQuery .= " OR adw_pettycash_request_id = ?)";
+            $queryParams[] = $requestData->adw_pettycash_request_id;
         } else {
             $pettyCashRequestsQuery .= ")";
         }
@@ -184,8 +184,8 @@ class PettyCashClosingController extends Controller
 
         // Fetch Cost Centers
         $costCenters = DB::connection('idempiere')->select("
-            SELECT dpk_cost_center_id AS id, name AS text
-            FROM dpk_cost_center
+            SELECT c_costcenter_id AS id, name AS text
+            FROM c_costcenter
             WHERE isactive = 'Y' AND ad_client_id = ?
             ORDER BY name
         ", [$clientId]);
@@ -193,17 +193,17 @@ class PettyCashClosingController extends Controller
         // Lines
         if ($requestData) {
             $lines = DB::connection('idempiere')
-                ->table('dpk_pettycash_closingline as pcl')
-                ->leftJoin('dpk_pettycash_requestline as drl', 'pcl.dpk_pettycash_requestline_id', '=', 'drl.dpk_pettycash_requestline_id')
-                ->leftJoin('dpk_pettycash_request as dr', 'drl.dpk_pettycash_request_id', '=', 'dr.dpk_pettycash_request_id')
-                ->where('pcl.dpk_pettycash_closing_id', $requestData->dpk_pettycash_closing_id)
+                ->table('adw_pettycash_closingline as pcl')
+                ->leftJoin('adw_pettycash_requestline as drl', 'pcl.adw_pettycash_requestline_id', '=', 'drl.adw_pettycash_requestline_id')
+                ->leftJoin('adw_pettycash_request as dr', 'drl.adw_pettycash_request_id', '=', 'dr.adw_pettycash_request_id')
+                ->where('pcl.adw_pettycash_closing_id', $requestData->adw_pettycash_closing_id)
                 ->where('pcl.isactive', 'Y')
                 ->select(
                     'pcl.*',
                     'dr.documentno as request_documentno',
                     'drl.line as request_line'
                 )
-                ->orderBy('pcl.dpk_pettycash_closingline_id')
+                ->orderBy('pcl.adw_pettycash_closingline_id')
                 ->paginate(10);
         } else {
             $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
@@ -254,7 +254,7 @@ class PettyCashClosingController extends Controller
                 $attachments = [];
                 if (isset($requestData)) {
                     try {
-                        $url = "models/dpk_pettycash_closing/{$requestData->dpk_pettycash_closing_id}/attachments";
+                        $url = "models/adw_pettycash_closing/{$requestData->adw_pettycash_closing_id}/attachments";
                         $response = $this->idempiereService->get($url);
 
                         if ($response->successful()) {
@@ -291,7 +291,7 @@ class PettyCashClosingController extends Controller
             'user_id' => 'required',
             'currency_id' => 'required',
             'doc_type_id' => 'required',
-            'dpk_pettycash_request_id' => 'required',
+            'adw_pettycash_request_id' => 'required',
             'date_trx' => 'required|date_format:Y-m-d',
             'date_acct' => 'nullable|date_format:Y-m-d',
             'description' => 'nullable|string',
@@ -318,7 +318,7 @@ class PettyCashClosingController extends Controller
             'AD_User_ID' => (int) $validated['user_id'],
             'C_Currency_ID' => (int) $validated['currency_id'],
             'C_DocTypeTarget_ID' => (int) $validated['doc_type_id'],
-            'DPK_PettyCash_Request_ID' => (int) $validated['dpk_pettycash_request_id'],
+            'ADW_PettyCash_Request_ID' => (int) $validated['adw_pettycash_request_id'],
             'DateTrx' => $validated['date_trx'],
             'DateAcct' => $validated['date_acct'] ?? $validated['date_trx'],
             'Description' => $validated['description'],
@@ -329,22 +329,22 @@ class PettyCashClosingController extends Controller
         }
 
         if (!empty($validated['cost_center_id'])) {
-            $payload['DPK_Cost_Center_ID'] = (int) $validated['cost_center_id'];
+            $payload['C_CostCenter_ID'] = (int) $validated['cost_center_id'];
         }
 
         Log::info('Petty Cash Closing Create Payload:', $payload);
 
         try {
-            $response = $this->idempiereService->post('models/dpk_pettycash_closing', $payload);
+            $response = $this->idempiereService->post('models/adw_pettycash_closing', $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
-                $id = $data['id'] ?? $data['DPK_PettyCash_Closing_ID'] ?? $data['recordID'] ?? null;
+                $id = $data['id'] ?? $data['ADW_PettyCash_Closing_ID'] ?? $data['recordID'] ?? null;
 
                 return response()->json([
                     'message' => 'Petty Cash Closing created successfully',
                     'data' => [
-                        'dpk_pettycash_closing_id' => $id,
+                        'adw_pettycash_closing_id' => $id,
                         'encrypted_id' => Crypt::encryptString($id)
                     ]
                 ]);
@@ -369,7 +369,7 @@ class PettyCashClosingController extends Controller
             'user_id' => 'nullable',
             'currency_id' => 'nullable',
             'doc_type_id' => 'nullable',
-            'dpk_pettycash_request_id' => 'nullable',
+            'adw_pettycash_request_id' => 'nullable',
             'date_trx' => 'nullable|date_format:Y-m-d',
             'date_acct' => 'nullable|date_format:Y-m-d',
             'description' => 'nullable|string',
@@ -387,8 +387,8 @@ class PettyCashClosingController extends Controller
             $payload['C_Currency_ID'] = (int) $validated['currency_id'];
         if (!empty($validated['doc_type_id']))
             $payload['C_DocTypeTarget_ID'] = (int) $validated['doc_type_id'];
-        if (!empty($validated['dpk_pettycash_request_id']))
-            $payload['DPK_PettyCash_Request_ID'] = (int) $validated['dpk_pettycash_request_id'];
+        if (!empty($validated['adw_pettycash_request_id']))
+            $payload['ADW_PettyCash_Request_ID'] = (int) $validated['adw_pettycash_request_id'];
         if (!empty($validated['date_trx']))
             $payload['DateTrx'] = $validated['date_trx'];
         if (!empty($validated['date_acct']))
@@ -396,10 +396,10 @@ class PettyCashClosingController extends Controller
         if (isset($validated['description']))
             $payload['Description'] = $validated['description'];
         if (!empty($validated['cost_center_id']))
-            $payload['DPK_Cost_Center_ID'] = (int) $validated['cost_center_id'];
+            $payload['C_CostCenter_ID'] = (int) $validated['cost_center_id'];
 
         try {
-            $response = $this->idempiereService->put("models/dpk_pettycash_closing/{$id}", $payload);
+            $response = $this->idempiereService->put("models/adw_pettycash_closing/{$id}", $payload);
             if ($response->successful()) {
                 return response()->json(['message' => 'Petty Cash Closing updated successfully']);
             } else {
@@ -445,34 +445,34 @@ class PettyCashClosingController extends Controller
             if (!empty($validated['line_id'])) {
                 // Update
                 $lineId = $validated['line_id'];
-                $response = $this->idempiereService->put("models/dpk_pettycash_closingline/{$lineId}", $payload);
+                $response = $this->idempiereService->put("models/adw_pettycash_closingline/{$lineId}", $payload);
                 $action = 'updated';
             } else {
                 // Create
                 $payload['AD_Client_ID'] = (int) $sessionClientId;
-                $payload['DPK_PettyCash_Closing_ID'] = (int) $closingId;
+                $payload['ADW_PettyCash_Closing_ID'] = (int) $closingId;
 
                 // Also copy the request ID
-                if ($closingData->dpk_pettycash_request_id) {
-                    $payload['DPK_PettyCash_Request_ID'] = (int) $closingData->dpk_pettycash_request_id;
+                if ($closingData->adw_pettycash_request_id) {
+                    $payload['ADW_PettyCash_Request_ID'] = (int) $closingData->adw_pettycash_request_id;
                 }
 
-                $response = $this->idempiereService->post("models/dpk_pettycash_closingline", $payload);
+                $response = $this->idempiereService->post("models/adw_pettycash_closingline", $payload);
                 $action = 'created';
             }
 
             if ($response->successful()) {
                 // Fetch updated total
                 $total = DB::connection('idempiere')
-                    ->table('dpk_pettycash_closingline')
-                    ->where('dpk_pettycash_closing_id', $closingId)
+                    ->table('adw_pettycash_closingline')
+                    ->where('adw_pettycash_closing_id', $closingId)
                     ->where('isactive', 'Y')
                     ->sum('amount');
 
                 if ($closingId) {
                     DB::connection('idempiere')
-                        ->table('dpk_pettycash_closing')
-                        ->where('dpk_pettycash_closing_id', $closingId)
+                        ->table('adw_pettycash_closing')
+                        ->where('adw_pettycash_closing_id', $closingId)
                         ->update(['totallines' => $total]);
                 }
 
@@ -505,14 +505,14 @@ class PettyCashClosingController extends Controller
 
                 if (!$closingId) {
                     $line = DB::connection('idempiere')
-                        ->table('dpk_pettycash_closingline')
-                        ->where('dpk_pettycash_closingline_id', $lineId)
-                        ->select('dpk_pettycash_closing_id')
+                        ->table('adw_pettycash_closingline')
+                        ->where('adw_pettycash_closingline_id', $lineId)
+                        ->select('adw_pettycash_closing_id')
                         ->first();
-                    $closingId = $line->dpk_pettycash_closing_id ?? null;
+                    $closingId = $line->adw_pettycash_closing_id ?? null;
                 }
 
-                $response = $this->idempiereService->delete("models/dpk_pettycash_closingline/{$lineId}");
+                $response = $this->idempiereService->delete("models/adw_pettycash_closingline/{$lineId}");
 
                 if (!$response->successful()) {
                     $errorBody = $response->json('detail') ?? $response->body();
@@ -527,13 +527,13 @@ class PettyCashClosingController extends Controller
             $updatedTotals = [];
             if ($closingId) {
                 $total = DB::connection('idempiere')
-                    ->table('dpk_pettycash_closingline')
-                    ->where('dpk_pettycash_closing_id', $closingId)
+                    ->table('adw_pettycash_closingline')
+                    ->where('adw_pettycash_closing_id', $closingId)
                     ->where('isactive', 'Y')
                     ->sum('amount');
                 DB::connection('idempiere')
-                    ->table('dpk_pettycash_closing')
-                    ->where('dpk_pettycash_closing_id', $closingId)
+                    ->table('adw_pettycash_closing')
+                    ->where('adw_pettycash_closing_id', $closingId)
                     ->update(['totallines' => $total]);
 
                 $updatedTotals['total'] = number_format($total ?? 0, 2);
@@ -569,24 +569,24 @@ class PettyCashClosingController extends Controller
                 'action' => $validated['doc_action']
             ]);
 
-            $response = $this->idempiereService->put("models/dpk_pettycash_closing/{$closingId}", $payload);
+            $response = $this->idempiereService->put("models/adw_pettycash_closing/{$closingId}", $payload);
 
             if ($response->successful()) {
                 // If we are completing the closing document, we should also close the associated request
                 if ($validated['doc_action'] === 'CO') {
                     $closingDoc = DB::connection('idempiere')
-                        ->table('dpk_pettycash_closing')
-                        ->where('dpk_pettycash_closing_id', $closingId)
-                        ->select('dpk_pettycash_request_id')
+                        ->table('adw_pettycash_closing')
+                        ->where('adw_pettycash_closing_id', $closingId)
+                        ->select('adw_pettycash_request_id')
                         ->first();
 
-                    if ($closingDoc && $closingDoc->dpk_pettycash_request_id) {
+                    if ($closingDoc && $closingDoc->adw_pettycash_request_id) {
                         Log::info('Automatically closing associated Petty Cash Request', [
-                            'request_id' => $closingDoc->dpk_pettycash_request_id
+                            'request_id' => $closingDoc->adw_pettycash_request_id
                         ]);
 
                         $reqPayload = ['doc-action' => 'CL'];
-                        $reqResponse = $this->idempiereService->put("models/dpk_pettycash_request/{$closingDoc->dpk_pettycash_request_id}", $reqPayload);
+                        $reqResponse = $this->idempiereService->put("models/adw_pettycash_request/{$closingDoc->adw_pettycash_request_id}", $reqPayload);
 
                         if (!$reqResponse->successful()) {
                             Log::error('Failed to auto-close Petty Cash Request: ' . $reqResponse->body());
@@ -627,7 +627,7 @@ class PettyCashClosingController extends Controller
             $file = $request->file('file');
 
             $response = $this->idempiereService->uploadFile(
-                "models/dpk_pettycash_closing/{$docId}/attachments",
+                "models/adw_pettycash_closing/{$docId}/attachments",
                 $file,
                 $file->getClientOriginalName()
             );
@@ -651,8 +651,8 @@ class PettyCashClosingController extends Controller
             $docId = Crypt::decryptString($validated['document_id']);
 
             $doc = DB::connection('idempiere')
-                ->table('dpk_pettycash_closing')
-                ->where('dpk_pettycash_closing_id', $docId)
+                ->table('adw_pettycash_closing')
+                ->where('adw_pettycash_closing_id', $docId)
                 ->select('docstatus', 'documentno')
                 ->first();
 
@@ -666,19 +666,19 @@ class PettyCashClosingController extends Controller
 
             // Delete existing lines first to avoid foreign key/custom mapping errors
             $lines = DB::connection('idempiere')
-                ->table('dpk_pettycash_closingline')
-                ->where('dpk_pettycash_closing_id', $docId)
+                ->table('adw_pettycash_closingline')
+                ->where('adw_pettycash_closing_id', $docId)
                 ->get();
 
             foreach ($lines as $line) {
-                $lineResponse = $this->idempiereService->delete("models/dpk_pettycash_closingline/{$line->dpk_pettycash_closingline_id}");
+                $lineResponse = $this->idempiereService->delete("models/adw_pettycash_closingline/{$line->adw_pettycash_closingline_id}");
                 if (!$lineResponse->successful()) {
-                    Log::error("Failed to delete line {$line->dpk_pettycash_closingline_id} during closing deletion");
+                    Log::error("Failed to delete line {$line->adw_pettycash_closingline_id} during closing deletion");
                 }
             }
 
             // Now delete the header document
-            $response = $this->idempiereService->delete("models/dpk_pettycash_closing/{$docId}");
+            $response = $this->idempiereService->delete("models/adw_pettycash_closing/{$docId}");
 
             if (!$response->successful()) {
                 $errorBody = $response->json('detail') ?? $response->body();
@@ -709,7 +709,7 @@ class PettyCashClosingController extends Controller
             $attId = $request->attachment_id;
             $encodedId = rawurlencode($attId);
 
-            $response = $this->idempiereService->delete("models/dpk_pettycash_closing/{$docId}/attachments/{$encodedId}");
+            $response = $this->idempiereService->delete("models/adw_pettycash_closing/{$docId}/attachments/{$encodedId}");
 
             if ($response->successful()) {
                 return response()->json(['success' => true]);
@@ -729,7 +729,7 @@ class PettyCashClosingController extends Controller
             $docId = Crypt::decryptString($document_id);
             $encodedFileName = rawurlencode($file_name);
 
-            $url = "models/dpk_pettycash_closing/{$docId}/attachments/{$encodedFileName}";
+            $url = "models/adw_pettycash_closing/{$docId}/attachments/{$encodedFileName}";
             $response = $this->idempiereService->get($url);
 
             if ($response->successful()) {
@@ -799,15 +799,15 @@ class PettyCashClosingController extends Controller
             foreach ($validated['request_lines'] as $line) {
                 $payload = [
                     'AD_Client_ID' => (int) $sessionClientId,
-                    'DPK_PettyCash_Closing_ID' => (int) $closingId,
-                    'DPK_PettyCash_Request_ID' => (int) ($closingData->dpk_pettycash_request_id ?? 0),
-                    'DPK_PettyCash_RequestLine_ID' => (int) $line['dpk_pettycash_requestline_id'],
+                    'ADW_PettyCash_Closing_ID' => (int) $closingId,
+                    'ADW_PettyCash_Request_ID' => (int) ($closingData->adw_pettycash_request_id ?? 0),
+                    'ADW_PettyCash_RequestLine_ID' => (int) $line['adw_pettycash_requestline_id'],
                     'Name' => current(array_filter([$line['value'] ?? null, $line['name'] ?? null, '-'])), // Using fallback based on name/value
                     'Description' => $line['description'] ?? null,
                     'Amount' => (float) $line['amount'],
                 ];
 
-                $response = $this->idempiereService->post("models/dpk_pettycash_closingline", $payload);
+                $response = $this->idempiereService->post("models/adw_pettycash_closingline", $payload);
                 if ($response->successful()) {
                     $successCount++;
                 } else {
@@ -818,15 +818,15 @@ class PettyCashClosingController extends Controller
 
             // Fetch updated total
             $total = DB::connection('idempiere')
-                ->table('dpk_pettycash_closingline')
-                ->where('dpk_pettycash_closing_id', $closingId)
+                ->table('adw_pettycash_closingline')
+                ->where('adw_pettycash_closing_id', $closingId)
                 ->where('isactive', 'Y')
                 ->sum('amount');
 
             if ($closingId) {
                 DB::connection('idempiere')
-                    ->table('dpk_pettycash_closing')
-                    ->where('dpk_pettycash_closing_id', $closingId)
+                    ->table('adw_pettycash_closing')
+                    ->where('adw_pettycash_closing_id', $closingId)
                     ->update(['totallines' => $total]);
             }
 
@@ -861,20 +861,20 @@ class PettyCashClosingController extends Controller
             $closingId = Crypt::decryptString($documentId);
             $closingData = DpkPettycashClosing::find($closingId);
 
-            if (!$closingData || !$closingData->dpk_pettycash_request_id) {
+            if (!$closingData || !$closingData->adw_pettycash_request_id) {
                 return response()->json(['results' => [], 'total' => 0]);
             }
 
-            $requestId = $closingData->dpk_pettycash_request_id;
+            $requestId = $closingData->adw_pettycash_request_id;
 
-            $query = DB::connection('idempiere')->table('dpk_pettycash_requestline as rl')
-                ->where('rl.dpk_pettycash_request_id', $requestId)
+            $query = DB::connection('idempiere')->table('adw_pettycash_requestline as rl')
+                ->where('rl.adw_pettycash_request_id', $requestId)
                 ->where('rl.isactive', 'Y')
                 ->whereNotExists(function ($qBuilder) use ($closingId) {
                     $qBuilder->select(DB::raw(1))
-                        ->from('dpk_pettycash_closingline as cl')
-                        ->whereColumn('cl.dpk_pettycash_requestline_id', 'rl.dpk_pettycash_requestline_id')
-                        ->where('cl.dpk_pettycash_closing_id', $closingId)
+                        ->from('adw_pettycash_closingline as cl')
+                        ->whereColumn('cl.adw_pettycash_requestline_id', 'rl.adw_pettycash_requestline_id')
+                        ->where('cl.adw_pettycash_closing_id', $closingId)
                         ->where('cl.isactive', 'Y');
                 });
 
@@ -919,7 +919,7 @@ class PettyCashClosingController extends Controller
             return response()->json([
                 'c_bpartner_id' => $request->c_bpartner_id,
                 'ad_user_id' => $request->ad_user_id,
-                'dpk_cost_center_id' => $request->dpk_cost_center_id,
+                'c_costcenter_id' => $request->c_costcenter_id,
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);

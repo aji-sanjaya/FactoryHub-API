@@ -4,10 +4,15 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Services\IdempiereService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Session;
 
 class AuthController extends Controller
 {
+    private const REMEMBER_COOKIE = 'factoryhub_remember';
+    private const REMEMBER_COOKIE_MINUTES = 43200;
+
     protected $idempiereService;
 
     public function __construct(IdempiereService $idempiereService)
@@ -15,8 +20,24 @@ class AuthController extends Controller
         $this->idempiereService = $idempiereService;
     }
 
-    public function showLoginForm()
+    public function showLoginForm(Request $request)
     {
+        if (Session::has('api_token')) {
+            return redirect()->route(Session::has('idempiere_role') ? 'dashboard' : 'auth.roles');
+        }
+
+        $rememberedCredentials = $this->getRememberedCredentials($request);
+
+        if ($rememberedCredentials) {
+            $result = $this->idempiereService->login($rememberedCredentials['username'], $rememberedCredentials['password']);
+
+            if ($result && isset($result['token'])) {
+                $this->storeLoginSession($result, $rememberedCredentials['username'], $rememberedCredentials['password']);
+
+                return redirect()->route('auth.roles');
+            }
+        }
+
         return view('pages.auth.signin', ['title' => 'Sign In']);
     }
 
@@ -25,28 +46,73 @@ class AuthController extends Controller
         $request->validate([
             'username' => 'required',
             'password' => 'required',
+            'remember' => 'nullable|boolean',
         ]);
 
         // Map input to userName for iDempiere
         $username = trim($request->input('username'));
         $password = $request->input('password');
+        $remember = $request->boolean('remember');
 
         $result = $this->idempiereService->login($username, $password);
 
         if ($result && isset($result['token'])) {
-            // Store token and user info in session
-            Session::put('api_token', $result['token']);
-            Session::put('user_data', $result);
-            Session::put('idempiere_username', $username);
-            Session::put('idempiere_auth_pwd', $password); // Store Pwd Temporarily
+            $this->storeLoginSession($result, $username, $password);
 
-            // Always redirect to Role Selection
-            return redirect()->route('auth.roles');
+            $response = $request->expectsJson()
+                ? response()->json(['success' => true])
+                : redirect()->route('auth.roles');
+
+            return $remember
+                ? $response->withCookie($this->makeRememberCookie($username, $password))
+                : $response->withCookie(Cookie::forget(self::REMEMBER_COOKIE));
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Username atau password salah.',
+            ], 422);
         }
 
         return back()->withErrors([
             'username' => 'The provided credentials do not match our records.',
         ])->withInput($request->only('username'));
+    }
+
+    public function showRoleSelectionPartial(Request $request)
+    {
+        if (!Session::has('api_token')) {
+            return response('Unauthorized', 401);
+        }
+
+        try {
+            $userData = Session::get('user_data');
+            $userId = $userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? null;
+            $username = Session::get('idempiere_username');
+
+            $tenants = \App\Models\Idempiere\AdClient::where('isactive', 'Y')
+                ->where('ad_client_id', '>', 0)
+                ->orderBy('name')
+                ->get(['ad_client_id as id', 'name as text']);
+
+            $debug_first_user = \App\Models\Idempiere\AdUser::first();
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to fetch iDempiere clients (partial): ' . $e->getMessage());
+            $tenants = collect();
+            $debug_first_user = null;
+            $userId = null;
+            $username = null;
+            $debug_error = $e->getMessage();
+        }
+
+        return view('pages.auth.select-role-partial', [
+            'tenants'          => $tenants,
+            'debug_userId'     => $userId ?? null,
+            'debug_username'   => $username ?? 'Not in Session',
+            'debug_first_user' => $debug_first_user ?? null,
+            'debug_error'      => $debug_error ?? null,
+        ]);
     }
 
     public function showRoleSelection()
@@ -99,24 +165,39 @@ class AuthController extends Controller
         ]);
     }
 
+    public function getClients(Request $request)
+    {
+        $clients = \App\Models\Idempiere\AdClient::where('isactive', 'Y')
+            ->where('ad_client_id', '>', 0)
+            ->orderBy('name')
+            ->get(['ad_client_id as id', 'name as text']);
+
+        return response()->json($clients);
+    }
+
     public function getRoles(Request $request)
     {
         $clientId = $request->input('client_id');
 
-        // Get User ID from session
-        $userData = Session::get('user_data');
-        $userId = $userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? null;
+        // Accept user_id directly (for mobile app) or fall back to session
+        $userId = $request->input('user_id');
 
-        // Use lookup fallback if needed (same logic as showRoleSelection)
         if (!$userId) {
-            $username = Session::get('idempiere_username');
-            if ($username) {
-                $userRecord = \App\Models\Idempiere\AdUser::where(function ($query) use ($username) {
-                    $query->whereRaw('LOWER(name) = ?', [strtolower($username)])
-                        ->orWhereRaw('LOWER(value) = ?', [strtolower($username)]);
-                })->select('ad_user_id')->first();
-                if ($userRecord)
-                    $userId = $userRecord->ad_user_id;
+            // Get User ID from session
+            $userData = Session::get('user_data');
+            $userId = $userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? null;
+
+            // Use lookup fallback if needed (same logic as showRoleSelection)
+            if (!$userId) {
+                $username = Session::get('idempiere_username');
+                if ($username) {
+                    $userRecord = \App\Models\Idempiere\AdUser::where(function ($query) use ($username) {
+                        $query->whereRaw('LOWER(name) = ?', [strtolower($username)])
+                            ->orWhereRaw('LOWER(value) = ?', [strtolower($username)]);
+                    })->select('ad_user_id')->first();
+                    if ($userRecord)
+                        $userId = $userRecord->ad_user_id;
+                }
             }
         }
 
@@ -153,20 +234,25 @@ class AuthController extends Controller
         $clientId = $request->input('client_id');
         $roleId = $request->input('role_id');
 
-        // Get User ID from session
-        $userData = Session::get('user_data');
-        $userId = $userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? null;
+        // Accept user_id directly (for mobile app) or fall back to session
+        $userId = $request->input('user_id');
 
-        // Fallback user lookup
         if (!$userId) {
-            $username = Session::get('idempiere_username');
-            if ($username) {
-                $userRecord = \App\Models\Idempiere\AdUser::where(function ($query) use ($username) {
-                    $query->whereRaw('LOWER(name) = ?', [strtolower($username)])
-                        ->orWhereRaw('LOWER(value) = ?', [strtolower($username)]);
-                })->select('ad_user_id')->first();
-                if ($userRecord)
-                    $userId = $userRecord->ad_user_id;
+            // Get User ID from session
+            $userData = Session::get('user_data');
+            $userId = $userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? null;
+
+            // Fallback user lookup
+            if (!$userId) {
+                $username = Session::get('idempiere_username');
+                if ($username) {
+                    $userRecord = \App\Models\Idempiere\AdUser::where(function ($query) use ($username) {
+                        $query->whereRaw('LOWER(name) = ?', [strtolower($username)])
+                            ->orWhereRaw('LOWER(value) = ?', [strtolower($username)]);
+                    })->select('ad_user_id')->first();
+                    if ($userRecord)
+                        $userId = $userRecord->ad_user_id;
+                }
             }
         }
 
@@ -284,6 +370,7 @@ class AuthController extends Controller
         Session::put('idempiere_client', $clientId);
         Session::put('idempiere_org', $orgId);
         Session::put('idempiere_warehouse', $warehouseId);
+        Session::forget('selected_root_menu_id');
 
         // Perform Laravel Login (Simulated/Bypass for now to satisfy auth middleware)
         // In a real scenario, we might find a local user by email or create one.
@@ -305,13 +392,93 @@ class AuthController extends Controller
         return redirect()->route('dashboard');
     }
 
-    public function logout()
+    public function logout(): RedirectResponse
     {
         Session::forget('api_token');
         Session::forget('user_data');
         Session::forget('idempiere_role');
         Session::forget('idempiere_client');
+        Session::forget('idempiere_org');
+        Session::forget('idempiere_warehouse');
+        Session::forget('idempiere_username');
+        Session::forget('idempiere_auth_pwd');
+        Session::forget('selected_root_menu_id');
         \Illuminate\Support\Facades\Auth::logout();
-        return redirect()->route('signin');
+
+        return redirect()->route('signin')->withCookie(Cookie::forget(self::REMEMBER_COOKIE));
+    }
+
+    public function changeRole(Request $request)
+    {
+        if (!Session::has('api_token')) {
+            return redirect()->route('signin');
+        }
+
+        Session::forget('idempiere_role');
+        Session::forget('idempiere_client');
+        Session::forget('idempiere_org');
+        Session::forget('idempiere_warehouse');
+        Session::forget('selected_root_menu_id');
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'redirect' => route('auth.roles'),
+            ]);
+        }
+
+        return redirect()->route('auth.roles');
+    }
+
+    private function storeLoginSession(array $result, string $username, string $password): void
+    {
+        Session::put('api_token', $result['token']);
+        Session::put('user_data', $result);
+        Session::put('idempiere_username', $username);
+        Session::put('idempiere_auth_pwd', $password);
+        Session::forget('selected_root_menu_id');
+    }
+
+    private function makeRememberCookie(string $username, string $password)
+    {
+        return Cookie::make(
+            self::REMEMBER_COOKIE,
+            json_encode([
+                'username' => $username,
+                'password' => $password,
+            ], JSON_THROW_ON_ERROR),
+            self::REMEMBER_COOKIE_MINUTES
+        );
+    }
+
+    private function getRememberedCredentials(Request $request): ?array
+    {
+        $cookieValue = $request->cookie(self::REMEMBER_COOKIE);
+
+        if (blank($cookieValue)) {
+            return null;
+        }
+
+        try {
+            $credentials = json_decode($cookieValue, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            Cookie::queue(Cookie::forget(self::REMEMBER_COOKIE));
+
+            return null;
+        }
+
+        $username = trim((string) ($credentials['username'] ?? ''));
+        $password = (string) ($credentials['password'] ?? '');
+
+        if ($username === '' || $password === '') {
+            Cookie::queue(Cookie::forget(self::REMEMBER_COOKIE));
+
+            return null;
+        }
+
+        return [
+            'username' => $username,
+            'password' => $password,
+        ];
     }
 }

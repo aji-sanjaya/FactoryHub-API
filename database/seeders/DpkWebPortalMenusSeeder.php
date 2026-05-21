@@ -15,7 +15,7 @@ class DpkWebPortalMenusSeeder extends Seeder
     public function run(): void
     {
         // Clear existing menus
-        DB::table('dpk_web_portal_menus')->delete();
+        DB::table('adw_web_portal_menus')->delete();
 
         $menuGroups = MenuHelper::getMenuGroups();
 
@@ -24,7 +24,7 @@ class DpkWebPortalMenusSeeder extends Seeder
         foreach ($menuGroups as $group) {
             foreach ($group['items'] as $item) {
                 // Insert parent menu
-                $parentId = DB::table('dpk_web_portal_menus')->insertGetId([
+                $parentId = DB::table('adw_web_portal_menus')->insertGetId([
                     'parent_id' => null,
                     'name' => $item['name'],
                     'icon' => $item['icon'] ?? null,
@@ -40,7 +40,7 @@ class DpkWebPortalMenusSeeder extends Seeder
                 if (isset($item['subItems']) && is_array($item['subItems'])) {
                     $subSortOrder = 1;
                     foreach ($item['subItems'] as $subItem) {
-                        DB::table('dpk_web_portal_menus')->insert([
+                        DB::table('adw_web_portal_menus')->insert([
                             'parent_id' => $parentId,
                             'name' => $subItem['name'],
                             'icon' => $subItem['icon'] ?? null,

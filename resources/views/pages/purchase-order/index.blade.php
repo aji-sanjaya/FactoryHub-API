@@ -150,9 +150,13 @@
                         // Our custom pagination 'tailwind-buttons' produces plain <a> tags.
                         // Let's check if href contains 'page='.
 
-                        const href = link.getAttribute('href');
+                        let href = link.getAttribute('href');
                         if (href && href.includes('page=')) {
                             e.preventDefault();
+                            @if(app()->environment('production'))
+                            // Force HTTPS to prevent blocked:mixed-content error in production
+                            href = href.replace(/^http:\/\//i, 'https://');
+                            @endif
                             fetchData(href);
                         }
                     }

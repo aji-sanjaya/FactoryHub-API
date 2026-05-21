@@ -23,6 +23,9 @@ class ApPaymentController extends Controller
 
     public function index()
     {
+        $apPaymentConfig = config('idempiere.ap-payment');
+        $statusConfig = $apPaymentConfig['statuses'];
+
         if (!Session::has('api_token')) {
             return redirect()->route('signin');
         }
@@ -31,8 +34,8 @@ class ApPaymentController extends Controller
             return $this->showForm(request('document_id'));
         }
 
-        $perPage = request()->get('per_page', 10);
-        $status = request()->get('status', ['DR', 'CO']);
+        $perPage = request()->get('per_page', $apPaymentConfig['limits']['list_per_page']);
+        $status = request()->get('status', $apPaymentConfig['defaults']['status_filters']);
         $search = request()->get('search', '');
         $dateStart = request()->get('date_start', '');
         $dateEnd = request()->get('date_end', '');
@@ -40,12 +43,12 @@ class ApPaymentController extends Controller
         $clientId = Session::get('idempiere_client');
 
         $query = CPayment::where('c_payment.ad_client_id', $clientId)
-            ->where('c_payment.isreceipt', 'N')
+            ->where('c_payment.isreceipt', $apPaymentConfig['defaults']['is_receipt'])
             ->where('c_payment.isactive', 'Y')
-            ->where('c_payment.c_doctype_id', 1000009);
+            ->where('c_payment.c_doctype_id', $apPaymentConfig['doc_types']['payment']);
 
         $query->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_payment.c_doctype_id')
-            ->where('dt.docbasetype', 'APP')
+            ->where('dt.docbasetype', $apPaymentConfig['doc_types']['base_type'])
             ->select('c_payment.*');
 
         if ($status !== 'all' && !empty($status)) {
@@ -66,16 +69,16 @@ class ApPaymentController extends Controller
         $payments = $query->paginate($perPage);
 
         $baseQuery = CPayment::where('c_payment.ad_client_id', $clientId)
-            ->where('c_payment.isreceipt', 'N')
+            ->where('c_payment.isreceipt', $apPaymentConfig['defaults']['is_receipt'])
             ->where('c_payment.isactive', 'Y')
-            ->where('c_payment.c_doctype_id', 1000009)
+            ->where('c_payment.c_doctype_id', $apPaymentConfig['doc_types']['payment'])
             ->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_payment.c_doctype_id')
-            ->where('dt.docbasetype', 'APP');
+            ->where('dt.docbasetype', $apPaymentConfig['doc_types']['base_type']);
 
         $countAll = (clone $baseQuery)->count();
-        $countDraft = (clone $baseQuery)->where('c_payment.docstatus', 'DR')->count();
-        $countInProgress = (clone $baseQuery)->where('c_payment.docstatus', 'IP')->count();
-        $countCompleted = (clone $baseQuery)->whereIn('c_payment.docstatus', ['CO', 'CL'])->count();
+        $countDraft = (clone $baseQuery)->whereIn('c_payment.docstatus', $statusConfig['draft'])->count();
+        $countInProgress = (clone $baseQuery)->where('c_payment.docstatus', $statusConfig['in_progress'])->count();
+        $countCompleted = (clone $baseQuery)->whereIn('c_payment.docstatus', $statusConfig['completed'])->count();
 
         if (request()->ajax()) {
             return response()->json([
@@ -97,6 +100,9 @@ class ApPaymentController extends Controller
 
     private function showForm($docId)
     {
+        $apPaymentConfig = config('idempiere.ap-payment');
+        $statusConfig = $apPaymentConfig['statuses'];
+
         $payment = null;
         if ($docId !== 'new') {
             try {
@@ -133,7 +139,7 @@ class ApPaymentController extends Controller
             SELECT c_bpartner_id AS id, name AS text
             FROM c_bpartner
             WHERE isactive = 'Y' AND ad_client_id = ? AND isvendor='Y'
-            ORDER BY name LIMIT 200
+            ORDER BY name LIMIT {$apPaymentConfig['limits']['vendor_search']}
         ", [$clientId]);
 
         // Doc Types for AP Payment
@@ -141,10 +147,10 @@ class ApPaymentController extends Controller
             SELECT dt.c_doctype_id AS id, dt.name AS text
             FROM c_doctype dt
             WHERE dt.isactive = 'Y'
-            AND dt.docbasetype = 'APP'
+            AND dt.docbasetype = ?
             AND dt.ad_client_id = ?
             ORDER BY dt.c_doctype_id ASC
-        ", [$clientId]);
+        ", [$apPaymentConfig['doc_types']['base_type'], $clientId]);
 
         // Currencies
         $currencies = DB::connection('idempiere')->select("
@@ -167,14 +173,7 @@ class ApPaymentController extends Controller
         ", [$clientId]);
 
         // Payment Rules (Tender Types)
-        $paymentRules = [
-            ['id' => 'T', 'text' => 'Account (Transfer)'],
-            ['id' => 'X', 'text' => 'Cash'],
-            ['id' => 'K', 'text' => 'Check'],
-            ['id' => 'D', 'text' => 'Direct Debit'],
-            ['id' => 'C', 'text' => 'Credit Card'],
-            ['id' => 'A', 'text' => 'Direct Deposit'],
-        ];
+        $paymentRules = $apPaymentConfig['payment_rules'];
 
         // Vendor Contacts
         $vendorContacts = [];
@@ -187,7 +186,9 @@ class ApPaymentController extends Controller
             ", [$payment->c_bpartner_id]);
         }
 
-        $statusLabel = $payment ? $this->getStatusLabel($payment->docstatus) : 'Draft';
+        $statusLabel = $payment
+            ? $this->getStatusLabel($payment->docstatus)
+            : $apPaymentConfig['defaults']['document_status_label'];
 
         // Check Active Workflow
         $hasActiveWorkflow = false;
@@ -195,7 +196,7 @@ class ApPaymentController extends Controller
             $hasActiveWorkflow = DB::connection('idempiere')
                 ->table('ad_wf_activity')
                 ->join('ad_table', 'ad_table.ad_table_id', '=', 'ad_wf_activity.ad_table_id')
-                ->where('ad_table.tablename', 'C_Payment')
+                ->where('ad_table.tablename', $apPaymentConfig['workflow']['table_name'])
                 ->where('ad_wf_activity.record_id', $payment->c_payment_id)
                 ->where('ad_wf_activity.processed', 'N')
                 ->exists();
@@ -207,7 +208,7 @@ class ApPaymentController extends Controller
         $defaultCurrencyId = null;
         $idrCurrency = DB::connection('idempiere')
             ->table('c_currency')
-            ->where('iso_code', 'IDR')
+            ->where('iso_code', $apPaymentConfig['defaults']['currency_iso_code'])
             ->where('isactive', 'Y')
             ->first();
         if ($idrCurrency) {
@@ -237,14 +238,14 @@ class ApPaymentController extends Controller
                 ? \Carbon\Carbon::parse($payment->dateacct)->format('Y-m-d')
                 : date('Y-m-d'),
             'docIdParam' => request('document_id'),
-            'isReadOnly' => $payment && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']),
-            'isDraft' => $payment && $payment->docstatus === 'DR',
+            'isReadOnly' => $payment && in_array($payment->docstatus, $statusConfig['read_only']),
+            'isDraft' => $payment && in_array($payment->docstatus, $statusConfig['draft']),
             'activeTab' => request('tab', 'header'),
             'hasActiveWorkflow' => $hasActiveWorkflow,
             'docTypeId' => $payment ? $payment->c_doctype_id : $defaultDocTypeId,
             'currencyId' => $payment ? $payment->c_currency_id : $defaultCurrencyId,
             'payAmt' => $payment ? $payment->payamt : 0,
-            'paymentRule' => $payment ? ($payment->tendertype ?? $payment->paymentrule ?? 'T') : 'T',
+            'paymentRule' => $payment ? ($payment->tendertype ?? $payment->paymentrule ?? $apPaymentConfig['defaults']['payment_rule']) : $apPaymentConfig['defaults']['payment_rule'],
             'bankAccountId' => $payment ? $payment->c_bankaccount_id : null,
         ];
 
@@ -281,7 +282,6 @@ class ApPaymentController extends Controller
                 if (isset($payment)) {
                     $allocations = DB::connection('idempiere')
                         ->table('c_paymentallocate as pa')
-                        ->leftJoin('c_invoice as i', 'i.c_invoice_id', '=', 'pa.c_invoice_id')
                         ->select(
                             'pa.c_paymentallocate_id',
                             'pa.c_invoice_id',
@@ -316,10 +316,10 @@ class ApPaymentController extends Controller
                             DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                             DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                         )
-                        ->where('fa.ad_table_id', 335)
+                        ->where('fa.ad_table_id', $apPaymentConfig['journals']['table_id'])
                         ->where('fa.record_id', $payment->c_payment_id)
                         ->orderBy('fa.fact_acct_id')
-                        ->paginate(10)
+                        ->paginate($apPaymentConfig['limits']['journals_per_page'])
                         ->appends(['ajax_tab' => 'journals']);
                 }
                 $viewData['journals'] = $journals;
@@ -331,12 +331,14 @@ class ApPaymentController extends Controller
     }
 
     public function create()
-    {
-        return redirect()->route('ap-payment.index', ['document_id' => 'new']);
-    }
+        {
+            return redirect()->route('ap-payment.index', ['document_id' => 'new']);
+        }
 
     public function store(Request $request)
     {
+        $apPaymentConfig = config('idempiere.ap-payment');
+
         $validated = $request->validate([
             'org_id' => 'required',
             'c_bpartner_id' => 'required',
@@ -372,7 +374,7 @@ class ApPaymentController extends Controller
             'C_DocType_ID' => (int) $validated['doc_type_id'],
             'DateTrx' => $validated['payment_date'],
             'DateAcct' => $validated['date_acct'] ?? $validated['payment_date'],
-            'IsReceipt' => 'N',
+            'IsReceipt' => $apPaymentConfig['defaults']['is_receipt'],
             'C_BPartner_ID' => $bpartnerId,
             'C_Currency_ID' => (int) $validated['c_currency_id'],
             'TenderType' => $validated['payment_rule'],
@@ -463,9 +465,11 @@ class ApPaymentController extends Controller
 
     public function process(Request $request)
     {
+        $allowedActions = implode(',', config('idempiere.ap-payment.workflow.allowed_actions', []));
+
         $validated = $request->validate([
             'document_id' => 'required',
-            'doc_action' => 'required|in:CO,VO,CL,RC',
+            'doc_action' => 'required|in:' . $allowedActions,
         ]);
 
         try {
@@ -604,6 +608,7 @@ class ApPaymentController extends Controller
     public function getOpenInvoices(Request $request)
     {
         try {
+            $apPaymentConfig = config('idempiere.ap-payment');
             $docId = Crypt::decryptString($request->document_id);
             $payment = CPayment::findOrFail($docId);
             $vendorId = $payment->c_bpartner_id;
@@ -614,7 +619,7 @@ class ApPaymentController extends Controller
             }
 
             $search = $request->get('q', '');
-            $perPage = $request->get('per_page', 20);
+            $perPage = $request->get('per_page', $apPaymentConfig['limits']['open_invoices_per_page']);
 
             $query = DB::connection('idempiere')
                 ->table('c_invoice')
@@ -636,8 +641,8 @@ class ApPaymentController extends Controller
                 ->leftJoin('c_payment as p', 'p.c_payment_id', '=', 'pa.c_payment_id')
                 ->where('c_invoice.c_bpartner_id', $vendorId)
                 ->where('c_invoice.c_currency_id', $currencyId)
-                ->where('c_invoice.issotrx', 'N')
-                ->whereIn('c_invoice.docstatus', ['CO', 'CL'])  // Only completed/closed invoices (not reversed/voided)
+                ->where('c_invoice.issotrx', $apPaymentConfig['open_invoice_filters']['is_so_trx'])
+                ->whereIn('c_invoice.docstatus', $apPaymentConfig['open_invoice_filters']['doc_statuses'])
                 ->where('c_invoice.isactive', 'Y')
                 ->groupBy(
                     'c_invoice.c_invoice_id',
@@ -847,17 +852,8 @@ class ApPaymentController extends Controller
     }
     private function getStatusLabel($docstatus)
     {
-        $map = [
-            'DR' => 'Draft',
-            'IP' => 'In Progress',
-            'CO' => 'Completed',
-            'CL' => 'Closed',
-            'VO' => 'Voided',
-            'RE' => 'Reversed',
-            'NA' => 'Not Approved',
-            'IN' => 'Invalid',
-            'AP' => 'Approved',
-        ];
+        $map = config('idempiere.ap-payment.statuses.labels', []);
+
         return $map[$docstatus] ?? $docstatus;
     }
 }

@@ -1,3 +1,8 @@
+@php
+    $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+    $statusOptions = $deliveryScheduleConfig['statuses']['filter_options'] ?? [];
+@endphp
+
 <div x-data="{ 
     openFilter: false,
     filters: {
@@ -87,8 +92,9 @@
                     <select x-model="filters.status"
                         class="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:text-white">
                         <option value="">All Statuses</option>
-                        <option value="DR">Drafted</option>
-                        <option value="CO">Completed</option>
+                        @foreach($statusOptions as $statusOption)
+                            <option value="{{ $statusOption['value'] }}">{{ $statusOption['label'] }}</option>
+                        @endforeach
                     </select>
                 </div>
             </div>

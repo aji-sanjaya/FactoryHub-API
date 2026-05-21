@@ -9,8 +9,10 @@
 
 <div class="px-8 py-6 max-w-7xl mx-auto">
     @php
+        $arReceiptConfig = config('idempiere.ar-receipt');
+        $readOnlyStatuses = $arReceiptConfig['statuses']['read_only'] ?? ['CO', 'CL', 'VO', 'RE'];
         $isNew = is_null($payment);
-        $isReadOnly = !$isNew && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $isReadOnly = !$isNew && in_array($payment->docstatus, $readOnlyStatuses);
         $docNo = $isNew ? '** New **' : $payment->documentno;
         $clientName = session('idempiere_client_name', 'Dharmamulia Prima Karya');
     @endphp

@@ -12,6 +12,8 @@ class CustomerShipmentLineController extends Controller
      */
     private function validateSOLineQty(int $cOrderlineId, float $newQty, ?int $excludeLineId = null): ?string
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
+
         $orderLine = \Illuminate\Support\Facades\DB::connection('idempiere')
             ->table('c_orderline')
             ->where('c_orderline_id', $cOrderlineId)
@@ -25,7 +27,7 @@ class CustomerShipmentLineController extends Controller
             ->table('m_inoutline as iol')
             ->join('m_inout as io', 'io.m_inout_id', '=', 'iol.m_inout_id')
             ->where('iol.c_orderline_id', $cOrderlineId)
-            ->whereIn('io.docstatus', ['DR', 'IP', 'CO']); // exclude Voided/Reversed
+            ->whereIn('io.docstatus', $customerShipmentConfig['statuses']['delivery_progress']);
 
         if ($excludeLineId) {
             $query->where('iol.m_inoutline_id', '!=', $excludeLineId);
@@ -84,6 +86,9 @@ class CustomerShipmentLineController extends Controller
 
     public function storeFromSO(Request $request)
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
+        $baseUrl = rtrim(config('idempiere.api.base_url'), '/');
+
         $validated = $request->validate([
             'document_id' => 'required',
             'lines' => 'required|array|min:1',
@@ -162,7 +167,7 @@ class CustomerShipmentLineController extends Controller
                     continue;
                 }
 
-                $maxLine += 10;
+                $maxLine += $customerShipmentConfig['limits']['line_increment'];
 
                 $payload = [
                     'M_InOutLine' => [
@@ -179,9 +184,9 @@ class CustomerShipmentLineController extends Controller
                     ]
                 ];
 
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId, $payload, $baseUrl) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->put('https://idempiere.dpkgreenlog.id/api/v1/models/m_inout/' . $shipmentId, $payload);
+                        ->put($baseUrl . '/models/m_inout/' . $shipmentId, $payload);
                 });
 
                 if ($response->successful()) {
@@ -211,6 +216,9 @@ class CustomerShipmentLineController extends Controller
 
     public function store(Request $request)
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
+        $baseUrl = rtrim(config('idempiere.api.base_url'), '/');
+
         // Strip thousand-separator commas from numeric fields before validation
         $request->merge([
             'qty' => str_replace(',', '', $request->input('qty', '')),
@@ -253,9 +261,9 @@ class CustomerShipmentLineController extends Controller
             }
 
             // Get max line number from existing lines
-            $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId) {
+            $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId, $baseUrl) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->get('https://idempiere.dpkgreenlog.id/api/v1/models/m_inout/' . $shipmentId);
+                    ->get($baseUrl . '/models/m_inout/' . $shipmentId);
             });
 
             $maxLine = 0;
@@ -325,7 +333,7 @@ class CustomerShipmentLineController extends Controller
                 }
             }
 
-            $nextLine = $maxLine + 10;
+            $nextLine = $maxLine + $customerShipmentConfig['limits']['line_increment'];
 
             // Prepare payload for iDempiere API
             $linePayload = [
@@ -351,9 +359,9 @@ class CustomerShipmentLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId, $payload) {
+            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId, $payload, $baseUrl) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/m_inout/' . $shipmentId, $payload);
+                    ->put($baseUrl . '/models/m_inout/' . $shipmentId, $payload);
             });
 
             if (!$response->successful()) {
@@ -411,6 +419,8 @@ class CustomerShipmentLineController extends Controller
 
     public function update(Request $request)
     {
+        $baseUrl = rtrim(config('idempiere.api.base_url'), '/');
+
         // Strip thousand-separator commas from numeric fields before validation
         $request->merge([
             'qty' => str_replace(',', '', $request->input('qty', '')),
@@ -475,9 +485,9 @@ class CustomerShipmentLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($validated, $payload) {
+            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($validated, $payload, $baseUrl) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/m_inoutline/' . $validated['line_id'], $payload);
+                    ->put($baseUrl . '/models/m_inoutline/' . $validated['line_id'], $payload);
             });
 
             if (!$response->successful()) {
@@ -521,6 +531,8 @@ class CustomerShipmentLineController extends Controller
 
     public function delete(Request $request)
     {
+        $baseUrl = rtrim(config('idempiere.api.base_url'), '/');
+
         $validated = $request->validate([
             'line_ids' => 'required|array',
             'line_ids.*' => 'required|integer',
@@ -541,9 +553,9 @@ class CustomerShipmentLineController extends Controller
             $errors = [];
 
             foreach ($lineIds as $lineId) {
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($lineId) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($lineId, $baseUrl) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->delete('https://idempiere.dpkgreenlog.id/api/v1/models/m_inoutline/' . $lineId);
+                        ->delete($baseUrl . '/models/m_inoutline/' . $lineId);
                 });
 
                 if ($response->successful()) {
@@ -663,6 +675,9 @@ class CustomerShipmentLineController extends Controller
 
     public function import(Request $request)
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
+        $baseUrl = rtrim(config('idempiere.api.base_url'), '/');
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:5120', // 5MB
             'document_id' => 'required',
@@ -736,7 +751,7 @@ class CustomerShipmentLineController extends Controller
             $imported = 0;
             $failed = 0;
             $failedRows = []; // Store failed rows with error messages
-            $lineIncrement = 10;
+            $lineIncrement = $customerShipmentConfig['limits']['line_increment'];
             $totalRows = 0;
 
             foreach ($rows as $index => $row) {
@@ -800,9 +815,9 @@ class CustomerShipmentLineController extends Controller
                     ]
                 ];
 
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($shipmentId, $payload, $baseUrl) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->put('https://idempiere.dpkgreenlog.id/api/v1/models/m_inout/' . $shipmentId, $payload);
+                        ->put($baseUrl . '/models/m_inout/' . $shipmentId, $payload);
                 });
 
                 if ($response->successful()) {

@@ -3,6 +3,7 @@
 @section('content')
 
     @php 
+        $requisitionConfig = $requisitionConfig ?? config('idempiere.create-pr');
         $isNew = is_null($requisition);
         // Force active tab to header on page load/refresh
         $activeTab = 'header';
@@ -18,7 +19,7 @@
 
         // Default Values for New Record Logic
         $docNo = $isNew ? '** New **' : $requisition->documentno;
-        $status = $isNew ? 'Drafted' : $requisition->status_label;
+        $status = $isNew ? $requisitionConfig['defaults']['document_status_label'] : $requisition->status_label;
         $desc = $isNew ? '' : $requisition->description;
 
         // Calculate Default Warehouse (Min ID)
@@ -41,8 +42,22 @@
         // Read Only Logic
         $isReadOnly = false;
         if (!$isNew && isset($requisition->docstatus)) {
-            $isReadOnly = in_array($requisition->docstatus, ['CO', 'CL', 'VO', 'RE']);
+            $isReadOnly = in_array($requisition->docstatus, $requisitionConfig['statuses']['read_only'], true);
         }
+
+        $printableStatuses = $requisitionConfig['statuses']['printable'] ?? [];
+        $workflowConfig = $requisitionConfig['workflow'] ?? [];
+        $reactivateStatuses = $workflowConfig['reactivate_from'] ?? [];
+        $standardStatuses = $workflowConfig['standard_from'] ?? [];
+        $reactivateAction = $workflowConfig['reactivate_action'] ?? 'RE';
+        $completeAction = $workflowConfig['complete_action'] ?? 'CO';
+        $prepareAction = $workflowConfig['prepare_action'] ?? 'PR';
+        $voidAction = $workflowConfig['void_action'] ?? 'VO';
+        $workflowActionLabels = $workflowConfig['action_labels'] ?? [];
+        $workflowConfirmationMessages = $workflowConfig['confirmation_messages'] ?? [];
+        $currentDocStatus = !$isNew && isset($requisition->docstatus) ? $requisition->docstatus : 'DR';
+        $canReactivate = $currentDocStatus === \App\Models\Idempiere\MRequisition::STATUS_COMPLETED
+            || in_array($currentDocStatus, $reactivateStatuses, true);
     @endphp
 
     <!-- Header / Breadcrumb -->
@@ -75,7 +90,7 @@
 
             <div class="flex gap-3">
                 <!-- Always Visible Action (Print) -->
-                @if(isset($requisition) && in_array($requisition->docstatus, ['IP', 'CO']))
+                @if(isset($requisition) && in_array($requisition->docstatus, $printableStatuses, true))
                     <button type="button"
                         onclick="openPrintModal('{{ route('requisition.print', \Illuminate\Support\Facades\Crypt::encryptString($requisition->m_requisition_id)) }}')"
                         class="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-4 focus:ring-gray-200 shadow-sm transition-all gap-2 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
@@ -89,7 +104,7 @@
                 @endif
 
                 <!-- Header Buttons Only Visible on Header Tab -->
-                <div id="header-actions" class="{{ $activeTab == 'header' ? 'block' : 'hidden' }}">
+                <div id="header-actions" class="{{ $activeTab == 'header' ? 'block' : 'hidden' }} flex gap-3">
                     @if(!$isReadOnly)
                         <button onclick="submitHeader()"
                             class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 focus:ring-4 focus:ring-brand-500/30 shadow-sm hover:shadow transition-all gap-2">
@@ -260,10 +275,13 @@
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
         <script>
+            const REQUISITION_ACTION_LABELS = @json($workflowActionLabels);
+            const REQUISITION_ACTION_CONFIRMATIONS = @json($workflowConfirmationMessages);
+
             // Initialization Function to be called on ready a    nd after AJAX
             function initScripts() {
                 // Init Select2 on All Dropdowns (Header variables)
-                $('#priority_rule, #org_id, #warehouse_id, #pricelist_id, #dpk_ad_user_checked_id, #dpk_ad_user_approved_id, #cost_center_id').select2({
+                $('#priority_rule, #org_id, #warehouse_id, #pricelist_id, #adw_ad_user_checked_id, #adw_ad_user_approved_id, #cost_center_id').select2({
                     width: '100%',
                     placeholder: '- Select -'
                 });
@@ -832,8 +850,8 @@
                     org_id: orgId,
                     pricelist_id: pricelistId,
                     priority_rule: priorityRule,
-                    dpk_ad_user_checked_id: $('#dpk_ad_user_checked_id').val(),
-                    dpk_ad_user_approved_id: $('#dpk_ad_user_approved_id').val(),
+                    adw_ad_user_checked_id: $('#adw_ad_user_checked_id').val(),
+                    adw_ad_user_approved_id: $('#adw_ad_user_approved_id').val(),
                     cost_center_id: $('#cost_center_id').val(),
                 };
 
@@ -931,27 +949,15 @@
                 let actionText = '';
                 let confirmText = '';
 
-                switch (action) {
-                    case 'CO':
-                        actionText = 'Complete';
-                        confirmText = 'Are you sure you want to complete this document?';
-                        break;
-                    case 'PR':
-                        actionText = 'Prepare';
-                        confirmText = 'Are you sure you want to prepare this document?';
-                        break;
-                    case 'VO':
-                        actionText = 'Void';
-                        confirmText = 'Are you sure you want to void this document? This action cannot be undone!';
-                        break;
-                }
+                actionText = REQUISITION_ACTION_LABELS[action] || action;
+                confirmText = REQUISITION_ACTION_CONFIRMATIONS[action] || 'Are you sure you want to process this document?';
 
                 Swal.fire({
                     title: `${actionText} Document?`,
                     text: confirmText,
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonColor: action === 'VO' ? '#ef4444' : '#4f46e5',
+                    confirmButtonColor: action === '{{ $voidAction }}' ? '#ef4444' : '#4f46e5',
                     cancelButtonColor: '#6b7280',
                     confirmButtonText: `Yes, ${actionText.toLowerCase()} it!`,
                     cancelButtonText: 'Cancel'
@@ -1048,10 +1054,15 @@
                     })
                     .catch(err => {
                         console.error(err);
+                        const errorMessage = err.response?.data?.message || err.message;
+                        const cannotDelete = err.response?.status === 422;
+
                         Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: 'Error deleting requisition: ' + (err.response?.data?.message || err.message),
+                            icon: cannotDelete ? 'warning' : 'error',
+                            title: cannotDelete ? 'Cannot Delete' : 'Error',
+                            text: cannotDelete
+                                ? errorMessage
+                                : 'Error deleting requisition: ' + errorMessage,
                             confirmButtonColor: '#4f46e5'
                         });
                     });
@@ -1289,21 +1300,17 @@
 
             <!-- Modal Body -->
             <div class="mt-4 space-y-3">
-                @php
-                    $reqStatus = isset($requisition) ? $requisition->docstatus : 'DR';
-                @endphp
-
-                @if($reqStatus == 'CO')
-                    <!-- Close Action for Completed Documents -->
-                    <button type="button" onclick="executeDocumentAction('CL')"
+                @if($canReactivate)
+                    <!-- Re-Active Action for Completed Documents -->
+                    <button type="button" onclick="executeDocumentAction('{{ $reactivateAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors dark:bg-gray-900/20 dark:hover:bg-gray-900/30 dark:border-gray-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    d="M4 4v5h.582m14.836 2A8.001 8.001 0 005.582 9m0 0H9m11 11v-5h-.581m0 0A8.003 8.003 0 016.582 15m12.837 0H15"></path>
                             </svg>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Close</span>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">{{ $workflowActionLabels[$reactivateAction] ?? 'Re-Active' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1311,10 +1318,10 @@
                         </svg>
                     </button>
 
-                @elseif(!in_array($reqStatus, ['CL', 'VO', 'RE']))
+                @elseif(in_array($currentDocStatus, $standardStatuses, true))
                     <!-- Standard Actions for Draft/In Progress -->
 
-                    <button type="button" onclick="executeDocumentAction('CO')"
+                    <button type="button" onclick="executeDocumentAction('{{ $completeAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors dark:bg-green-900/20 dark:hover:bg-green-900/30 dark:border-green-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
@@ -1322,7 +1329,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            <span class="font-medium text-green-700 dark:text-green-300">Complete</span>
+                            <span class="font-medium text-green-700 dark:text-green-300">{{ $workflowActionLabels[$completeAction] ?? 'Complete' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1330,7 +1337,7 @@
                         </svg>
                     </button>
 
-                    <button type="button" onclick="executeDocumentAction('PR')"
+                    {{-- <button type="button" onclick="executeDocumentAction('{{ $prepareAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors dark:bg-blue-900/20 dark:hover:bg-blue-900/30 dark:border-blue-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
@@ -1339,7 +1346,7 @@
                                     d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
                                 </path>
                             </svg>
-                            <span class="font-medium text-blue-700 dark:text-blue-300">Prepare</span>
+                            <span class="font-medium text-blue-700 dark:text-blue-300">{{ $workflowActionLabels[$prepareAction] ?? 'Prepare' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -1347,7 +1354,7 @@
                         </svg>
                     </button>
 
-                    <button type="button" onclick="executeDocumentAction('VO')"
+                    <button type="button" onclick="executeDocumentAction('{{ $voidAction }}')"
                         class="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:border-red-800">
                         <div class="flex items-center gap-3">
                             <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
@@ -1356,13 +1363,13 @@
                                     d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636">
                                 </path>
                             </svg>
-                            <span class="font-medium text-red-700 dark:text-red-300">Void</span>
+                            <span class="font-medium text-red-700 dark:text-red-300">{{ $workflowActionLabels[$voidAction] ?? 'Void' }}</span>
                         </div>
                         <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                         </svg>
-                    </button>
+                    </button> --}}
 
                 @else
                     <div class="text-center py-6">

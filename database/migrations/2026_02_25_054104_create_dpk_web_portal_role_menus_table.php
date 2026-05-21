@@ -10,14 +10,14 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::create('dpk_web_portal_role_menus', function (Blueprint $table) {
+        Schema::create('adw_web_portal_role_menus', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('role_id');
             $table->unsignedBigInteger('menu_id');
             $table->timestamps();
 
-            // $table->foreign('role_id')->references('id')->on('dpk_web_portal_roles')->onDelete('cascade');
-            // $table->foreign('menu_id')->references('id')->on('dpk_web_portal_menus')->onDelete('cascade');
+            // $table->foreign('role_id')->references('id')->on('adw_web_portal_roles')->onDelete('cascade');
+            // $table->foreign('menu_id')->references('id')->on('adw_web_portal_menus')->onDelete('cascade');
 
             $table->unique(['role_id', 'menu_id']);
         });
@@ -28,6 +28,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists('dpk_web_portal_role_menus');
+        Schema::dropIfExists('adw_web_portal_role_menus');
     }
 };

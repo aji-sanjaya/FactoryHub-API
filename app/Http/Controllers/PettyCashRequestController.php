@@ -162,8 +162,8 @@ class PettyCashRequestController extends Controller
 
         // Fetch Cost Centers
         $costCenters = DB::connection('idempiere')->select("
-            SELECT dpk_cost_center_id AS id, name AS text
-            FROM dpk_cost_center
+            SELECT c_costcenter_id AS id, name AS text
+            FROM c_costcenter
             WHERE isactive = 'Y' AND ad_client_id = ?
             ORDER BY name
         ", [$clientId]);
@@ -171,8 +171,8 @@ class PettyCashRequestController extends Controller
         // Lines
         if ($request) {
             $lines = DB::connection('idempiere')
-                ->table('dpk_pettycash_requestline')
-                ->where('dpk_pettycash_request_id', $request->dpk_pettycash_request_id)
+                ->table('adw_pettycash_requestline')
+                ->where('adw_pettycash_request_id', $request->adw_pettycash_request_id)
                 ->where('isactive', 'Y')
                 ->orderBy('line')
                 ->paginate(10);
@@ -223,7 +223,7 @@ class PettyCashRequestController extends Controller
                 $attachments = [];
                 if (isset($request)) {
                     try {
-                        $url = "models/dpk_pettycash_request/{$request->dpk_pettycash_request_id}/attachments";
+                        $url = "models/adw_pettycash_request/{$request->adw_pettycash_request_id}/attachments";
                         $response = $this->idempiereService->get($url);
 
                         if ($response->successful()) {
@@ -300,22 +300,22 @@ class PettyCashRequestController extends Controller
         }
 
         if (!empty($validated['cost_center_id'])) {
-            $payload['DPK_Cost_Center_ID'] = (int) $validated['cost_center_id'];
+            $payload['C_CostCenter_ID'] = (int) $validated['cost_center_id'];
         }
 
         Log::info('Petty Cash Request Create Payload:', $payload);
 
         try {
-            $response = $this->idempiereService->post('models/dpk_pettycash_request', $payload);
+            $response = $this->idempiereService->post('models/adw_pettycash_request', $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
-                $id = $data['id'] ?? $data['DPK_PettyCash_Request_ID'] ?? $data['recordID'] ?? null;
+                $id = $data['id'] ?? $data['ADW_PettyCash_Request_ID'] ?? $data['recordID'] ?? null;
 
                 return response()->json([
                     'message' => 'Petty Cash Request created successfully',
                     'data' => [
-                        'dpk_pettycash_request_id' => $id,
+                        'adw_pettycash_request_id' => $id,
                         'encrypted_id' => Crypt::encryptString($id)
                     ]
                 ]);
@@ -370,10 +370,10 @@ class PettyCashRequestController extends Controller
         // if (isset($validated['value']))
         //     $payload['Value'] = $validated['value'];
         if (!empty($validated['cost_center_id']))
-            $payload['DPK_Cost_Center_ID'] = (int) $validated['cost_center_id'];
+            $payload['C_CostCenter_ID'] = (int) $validated['cost_center_id'];
 
         try {
-            $response = $this->idempiereService->put("models/dpk_pettycash_request/{$id}", $payload);
+            $response = $this->idempiereService->put("models/adw_pettycash_request/{$id}", $payload);
             if ($response->successful()) {
                 return response()->json(['message' => 'Petty Cash Request updated successfully']);
             } else {
@@ -414,35 +414,35 @@ class PettyCashRequestController extends Controller
             if (!empty($validated['line_id'])) {
                 // Update
                 $lineId = $validated['line_id'];
-                $response = $this->idempiereService->put("models/dpk_pettycash_requestline/{$lineId}", $payload);
+                $response = $this->idempiereService->put("models/adw_pettycash_requestline/{$lineId}", $payload);
                 $action = 'updated';
             } else {
                 // Create - Get next line number
                 $lastLine = DB::connection('idempiere')
-                    ->table('dpk_pettycash_requestline')
-                    ->where('dpk_pettycash_request_id', $requestId)
+                    ->table('adw_pettycash_requestline')
+                    ->where('adw_pettycash_request_id', $requestId)
                     ->max('line');
                 $nextLine = ($lastLine ?? 0) + 10;
 
                 $payload['AD_Client_ID'] = (int) $sessionClientId;
-                $payload['DPK_PettyCash_Request_ID'] = (int) $requestId;
+                $payload['ADW_PettyCash_Request_ID'] = (int) $requestId;
                 $payload['Line'] = $nextLine;
-                $response = $this->idempiereService->post("models/dpk_pettycash_requestline", $payload);
+                $response = $this->idempiereService->post("models/adw_pettycash_requestline", $payload);
                 $action = 'created';
             }
 
             if ($response->successful()) {
                 // Fetch updated total
                 $total = DB::connection('idempiere')
-                    ->table('dpk_pettycash_requestline')
-                    ->where('dpk_pettycash_request_id', $requestId)
+                    ->table('adw_pettycash_requestline')
+                    ->where('adw_pettycash_request_id', $requestId)
                     ->where('isactive', 'Y')
                     ->sum('amount');
 
                 if ($requestId) {
                     DB::connection('idempiere')
-                        ->table('dpk_pettycash_request')
-                        ->where('dpk_pettycash_request_id', $requestId)
+                        ->table('adw_pettycash_request')
+                        ->where('adw_pettycash_request_id', $requestId)
                         ->update(['totallines' => $total]);
                 }
 
@@ -475,14 +475,14 @@ class PettyCashRequestController extends Controller
 
                 if (!$requestId) {
                     $line = DB::connection('idempiere')
-                        ->table('dpk_pettycash_requestline')
-                        ->where('dpk_pettycash_requestline_id', $lineId)
-                        ->select('dpk_pettycash_request_id')
+                        ->table('adw_pettycash_requestline')
+                        ->where('adw_pettycash_requestline_id', $lineId)
+                        ->select('adw_pettycash_request_id')
                         ->first();
-                    $requestId = $line->dpk_pettycash_request_id ?? null;
+                    $requestId = $line->adw_pettycash_request_id ?? null;
                 }
 
-                $response = $this->idempiereService->delete("models/dpk_pettycash_requestline/{$lineId}");
+                $response = $this->idempiereService->delete("models/adw_pettycash_requestline/{$lineId}");
 
                 if (!$response->successful()) {
                     $errorBody = $response->json('detail') ?? $response->body();
@@ -497,13 +497,13 @@ class PettyCashRequestController extends Controller
             $updatedTotals = [];
             if ($requestId) {
                 $total = DB::connection('idempiere')
-                    ->table('dpk_pettycash_requestline')
-                    ->where('dpk_pettycash_request_id', $requestId)
+                    ->table('adw_pettycash_requestline')
+                    ->where('adw_pettycash_request_id', $requestId)
                     ->where('isactive', 'Y')
                     ->sum('amount');
                 DB::connection('idempiere')
-                    ->table('dpk_pettycash_request')
-                    ->where('dpk_pettycash_request_id', $requestId)
+                    ->table('adw_pettycash_request')
+                    ->where('adw_pettycash_request_id', $requestId)
                     ->update(['totallines' => $total]);
 
                 $updatedTotals['total'] = number_format($total ?? 0, 2);
@@ -539,7 +539,7 @@ class PettyCashRequestController extends Controller
                 'action' => $validated['doc_action']
             ]);
 
-            $response = $this->idempiereService->put("models/dpk_pettycash_request/{$requestId}", $payload);
+            $response = $this->idempiereService->put("models/adw_pettycash_request/{$requestId}", $payload);
 
             if ($response->successful()) {
                 return response()->json([
@@ -575,7 +575,7 @@ class PettyCashRequestController extends Controller
             $file = $request->file('file');
 
             $response = $this->idempiereService->uploadFile(
-                "models/dpk_pettycash_request/{$docId}/attachments",
+                "models/adw_pettycash_request/{$docId}/attachments",
                 $file,
                 $file->getClientOriginalName()
             );
@@ -599,8 +599,8 @@ class PettyCashRequestController extends Controller
             $docId = Crypt::decryptString($validated['document_id']);
 
             $doc = DB::connection('idempiere')
-                ->table('dpk_pettycash_request')
-                ->where('dpk_pettycash_request_id', $docId)
+                ->table('adw_pettycash_request')
+                ->where('adw_pettycash_request_id', $docId)
                 ->select('docstatus', 'documentno')
                 ->first();
 
@@ -612,7 +612,7 @@ class PettyCashRequestController extends Controller
                 return response()->json(['message' => 'Only Draft requests can be deleted.'], 422);
             }
 
-            $response = $this->idempiereService->delete("models/dpk_pettycash_request/{$docId}");
+            $response = $this->idempiereService->delete("models/adw_pettycash_request/{$docId}");
 
             if (!$response->successful()) {
                 $errorBody = $response->json('detail') ?? $response->body();
@@ -643,7 +643,7 @@ class PettyCashRequestController extends Controller
             $attId = $request->attachment_id;
             $encodedId = rawurlencode($attId);
 
-            $response = $this->idempiereService->delete("models/dpk_pettycash_request/{$docId}/attachments/{$encodedId}");
+            $response = $this->idempiereService->delete("models/adw_pettycash_request/{$docId}/attachments/{$encodedId}");
 
             if ($response->successful()) {
                 return response()->json(['success' => true]);
@@ -663,7 +663,7 @@ class PettyCashRequestController extends Controller
             $docId = Crypt::decryptString($document_id);
             $encodedFileName = rawurlencode($file_name);
 
-            $url = "models/dpk_pettycash_request/{$docId}/attachments/{$encodedFileName}";
+            $url = "models/adw_pettycash_request/{$docId}/attachments/{$encodedFileName}";
             $response = $this->idempiereService->get($url);
 
             if ($response->successful()) {

@@ -1,3 +1,8 @@
+@php
+    $apInvoiceConfig = config('idempiere.ap-invoice');
+    $statusOptions = $apInvoiceConfig['statuses']['filter_options'] ?? [];
+@endphp
+
 <div x-data="{
     openFilter: false,
     filters: { date_start: '', date_end: '', status: '' },
@@ -61,11 +66,9 @@
                     <select x-model="filters.status"
                         class="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 focus:border-brand-500 focus:outline-none dark:border-gray-700 dark:text-white">
                         <option value="">All Statuses</option>
-                        <option value="DR">Draft</option>
-                        <option value="IP">In Progress</option>
-                        <option value="CO">Completed</option>
-                        <option value="CL">Closed</option>
-                        <option value="VO">Voided</option>
+                        @foreach($statusOptions as $statusOption)
+                            <option value="{{ $statusOption['value'] }}">{{ $statusOption['label'] }}</option>
+                        @endforeach
                     </select>
                 </div>
             </div>

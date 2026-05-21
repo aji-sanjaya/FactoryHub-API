@@ -71,6 +71,11 @@
     </style>
 @endpush
 @section('content')
+    @php
+        $approvalConfig = config('idempiere.approval-pr');
+        $filterOptions = $approvalConfig['statuses']['filter_options'];
+        $defaultStatus = request('status', $approvalConfig['defaults']['status_filter']);
+    @endphp
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         .select2-results__option {
@@ -135,10 +140,11 @@
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
                     <select id="statusFilter" class="select2 w-full">
-                        <option value="IP" {{ request('status', 'IP') == 'IP' ? 'selected' : '' }}>Pending</option>
-                        <option value="APPROVED" {{ request('status') == 'APPROVED' ? 'selected' : '' }}>Approved</option>
-                        <option value="REJECTED" {{ request('status') == 'REJECTED' ? 'selected' : '' }}>Rejected</option>
-                        <option value="ALL" {{ request('status') == 'ALL' ? 'selected' : '' }}>All</option>
+                        @foreach($filterOptions as $filterOption)
+                            <option value="{{ $filterOption['value'] }}" {{ $defaultStatus == $filterOption['value'] ? 'selected' : '' }}>
+                                {{ $filterOption['label'] }}
+                            </option>
+                        @endforeach
                     </select>
                 </div>
 
@@ -183,7 +189,7 @@
         <div id="table-container" class="relative min-h-[400px]">
             <!-- Loading Overlay -->
             <div id="table-loading"
-                class="hidden absolute inset-0 bg-white/50 dark:bg-gray-900/50 z-10 flex items-center justify-center backdrop-blur-[1px] rounded-xl">
+                class="hidden absolute inset-0 bg-white/50 dark:bg-gray-900/50 z-10 items-center justify-center backdrop-blur-[1px] rounded-xl">
                 <svg class="animate-spin h-8 w-8 text-brand-600" xmlns="http://www.w3.org/2000/svg" fill="none"
                     viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -294,6 +300,7 @@
         function fetchData(page = 1) {
             const loading = document.getElementById('table-loading');
             loading.classList.remove('hidden');
+            loading.classList.add('flex');
 
             const params = new URLSearchParams();
 
@@ -309,7 +316,7 @@
             if (supplier) params.append('c_bpartner_id', supplier);
 
             const costCenter = document.getElementById('costCenterFilter').value;
-            if (costCenter) params.append('dpk_cost_center_id', costCenter);
+            if (costCenter) params.append('c_costcenter_id', costCenter);
 
             const search = document.getElementById('searchInput').value;
             if (search) params.append('search', search);
@@ -327,6 +334,7 @@
                     console.error('Fetch error:', err);
                 })
                 .finally(() => {
+                    loading.classList.remove('flex');
                     loading.classList.add('hidden');
                 });
         }

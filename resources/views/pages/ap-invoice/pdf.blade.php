@@ -189,7 +189,7 @@
         </table>
 
         <div style="text-align: right; font-size: 9pt; margin-bottom: 10px;">
-            Page 1 / 1
+            {{-- Page 1 / 1 --}}
         </div>
 
         <!-- Invoice Number and Date -->
@@ -259,7 +259,22 @@
             <div class="details-row">
                 <span class="details-label">Nominal Invoice</span>
                 <span class="details-colon">:</span>
-                <span class="details-value">{{ number_format($invoice->grandtotal ?? 0, 2, '.', ',') }}</span>
+                <span class="details-value">{{ number_format($totalLines ?? 0, 2, '.', ',') }}</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Total Tax Amount</span>
+                <span class="details-colon">:</span>
+                <span class="details-value">{{ number_format($taxAmount ?? 0, 2, '.', ',') }}</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label">Total PPh23</span>
+                <span class="details-colon">:</span>
+                <span class="details-value">({{ number_format($withholdingTotal ?? 0, 2, '.', ',') }})</span>
+            </div>
+            <div class="details-row">
+                <span class="details-label font-bold">Grand Total</span>
+                <span class="details-colon">:</span>
+                <span class="details-value font-bold">{{ number_format($grandTotalNet ?? 0, 2, '.', ',') }}</span>
             </div>
             <div class="details-row">
                 <span class="details-label">Term Of Payment</span>

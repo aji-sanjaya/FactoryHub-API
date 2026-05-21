@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class DpkPettycashClosing extends Model
 {
     protected $connection = 'idempiere';
-    protected $table = 'dpk_pettycash_closing';
-    protected $primaryKey = 'dpk_pettycash_closing_id';
+    protected $table = 'adw_pettycash_closing';
+    protected $primaryKey = 'adw_pettycash_closing_id';
     public $timestamps = false;
 
     protected $fillable = [
@@ -28,8 +28,8 @@ class DpkPettycashClosing extends Model
         'processing',
         'posted',
         'totallines',
-        'dpk_cost_center_id',
-        'dpk_pettycash_request_id',
+        'c_costcenter_id',
+        'adw_pettycash_request_id',
         'created',
         'createdby',
         'updated',
@@ -50,9 +50,9 @@ class DpkPettycashClosing extends Model
      */
     public function lines()
     {
-        return $this->hasMany(DpkPettycashClosingLine::class, 'dpk_pettycash_closing_id', 'dpk_pettycash_closing_id')
+        return $this->hasMany(DpkPettycashClosingLine::class, 'adw_pettycash_closing_id', 'adw_pettycash_closing_id')
             ->where('isactive', 'Y')
-            ->orderBy('dpk_pettycash_closingline_id');
+            ->orderBy('adw_pettycash_closingline_id');
     }
 
     /**
@@ -60,7 +60,7 @@ class DpkPettycashClosing extends Model
      */
     public function pettyCashRequest()
     {
-        return $this->belongsTo(\App\Models\Idempiere\DpkPettycashRequest::class, 'dpk_pettycash_request_id', 'dpk_pettycash_request_id');
+        return $this->belongsTo(\App\Models\Idempiere\DpkPettycashRequest::class, 'adw_pettycash_request_id', 'adw_pettycash_request_id');
     }
 
     /**

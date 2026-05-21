@@ -23,6 +23,8 @@ class CustomerShipmentController extends Controller
      */
     public function index()
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
+
         // 1. Check Authentication / Session Context
         if (!\Illuminate\Support\Facades\Session::has('api_token')) {
             return redirect()->route('signin');
@@ -107,9 +109,9 @@ class CustomerShipmentController extends Controller
             $bpartners = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
                 SELECT c_bpartner_id AS id, name AS text
                 FROM c_bpartner
-                WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer = 'Y'
+                WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer = ?
                 ORDER BY name
-            ", [$clientId]);
+            ", [$clientId, $customerShipmentConfig['filters']['is_customer']]);
 
             // Fetch Client Name
             $client = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_client')
@@ -186,7 +188,7 @@ class CustomerShipmentController extends Controller
                 'currentOrgId' => isset($customerShipment) ? $customerShipment->ad_org_id : null,
                 'isNew' => is_null($customerShipment),
                 'docIdParam' => request('document_id'),
-                'isReadOnly' => isset($customerShipment) && in_array($customerShipment->docstatus, ['CO', 'CL', 'VO', 'RE']),
+                'isReadOnly' => isset($customerShipment) && in_array($customerShipment->docstatus, $customerShipmentConfig['statuses']['read_only']),
             ];
 
             // AJAX Partial Rendering
@@ -233,7 +235,7 @@ class CustomerShipmentController extends Controller
                                 \Illuminate\Support\Facades\DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                                 \Illuminate\Support\Facades\DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                             )
-                            ->where('fa.ad_table_id', 319) // 319 is M_InOut
+                            ->where('fa.ad_table_id', $customerShipmentConfig['journals']['table_id'])
                             ->where('fa.record_id', $customerShipment->m_inout_id)
                             ->orderBy('fa.fact_acct_id')
                             ->paginate(10)
@@ -252,8 +254,8 @@ class CustomerShipmentController extends Controller
 
         // 2. Base Query - Filter for Customer Shipments (issotrx='Y' AND movementtype='C-')
         $query = \App\Models\Idempiere\CInOut::query()
-            ->where('issotrx', 'Y')
-            ->where('movementtype', 'C-');
+            ->where('issotrx', $customerShipmentConfig['defaults']['is_so_trx'])
+            ->where('movementtype', $customerShipmentConfig['defaults']['movement_type']);
 
         if ($clientId) {
             $query->where('ad_client_id', $clientId);
@@ -271,15 +273,15 @@ class CustomerShipmentController extends Controller
         $statsQuery->whereBetween('movementdate', [$startOfMonth, $endOfMonth]);
 
         $countCompleted = (clone $statsQuery)
-            ->whereIn('docstatus', ['CO', 'CL'])
+            ->whereIn('docstatus', $customerShipmentConfig['statuses']['completed'])
             ->count();
 
         $countDraft = (clone $statsQuery)
-            ->whereIn('docstatus', ['DR', 'IN'])
+            ->whereIn('docstatus', $customerShipmentConfig['statuses']['draft'])
             ->count();
 
         $countInProgress = (clone $statsQuery)
-            ->where('docstatus', 'IP')
+            ->where('docstatus', $customerShipmentConfig['statuses']['in_progress'])
             ->count();
 
         $countAll = $statsQuery->count();
@@ -303,7 +305,7 @@ class CustomerShipmentController extends Controller
 
         if (!request()->has('status')) {
             // Initial page load, or pagination without explicit filter params
-            $query->whereIn('docstatus', ['DR', 'CO']);
+            $query->whereIn('docstatus', $customerShipmentConfig['statuses']['default_list']);
         } else {
             $statusStr = request('status');
             if (!empty($statusStr)) {
@@ -387,9 +389,10 @@ class CustomerShipmentController extends Controller
 
     public function getProducts(Request $request)
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
         $search = $request->get('q');
         $page = $request->get('page', 1);
-        $perPage = 25;
+        $perPage = $customerShipmentConfig['limits']['products_per_page'];
 
         // Get Client ID from session
         $clientId = \Illuminate\Support\Facades\Session::get('idempiere_client');
@@ -417,7 +420,7 @@ class CustomerShipmentController extends Controller
             ->where('p.ad_client_id', $clientId); // Filter by client
 
         // Only sold products, not purchased (finished goods for sale)
-        $query->where('p.issold', 'Y');
+        $query->where('p.issold', $customerShipmentConfig['filters']['is_sold']);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -458,6 +461,7 @@ class CustomerShipmentController extends Controller
      */
     public function getSOLines(Request $request)
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
         $documentId = $request->query('document_id');
         $soFilter = $request->query('so_document_no', '');
         $datePromisedFilter = $request->query('date_promised', '');
@@ -493,10 +497,10 @@ class CustomerShipmentController extends Controller
             ->join('m_product as p', 'p.m_product_id', '=', 'ol.m_product_id')
             ->leftJoin('c_uom as uom', 'uom.c_uom_id', '=', 'p.c_uom_id')
             ->where('o.c_bpartner_id', $bpartnerId)
-            ->where('o.docstatus', 'CO')
-            ->where('o.issotrx', 'Y')
+            ->where('o.docstatus', $customerShipmentConfig['filters']['source_sales_order_doc_status'])
+            ->where('o.issotrx', $customerShipmentConfig['defaults']['is_so_trx'])
             ->where('ol.isactive', 'Y')
-            ->where('o.c_doctypetarget_id', 1000032) //1000032
+            ->where('o.c_doctypetarget_id', $customerShipmentConfig['doc_types']['source_sales_order'])
             ->select(
                 'ol.c_orderline_id',
                 'ol.c_order_id',
@@ -534,8 +538,8 @@ class CustomerShipmentController extends Controller
                 ->table('m_inoutline as iol')
                 ->join('m_inout as io', 'io.m_inout_id', '=', 'iol.m_inout_id')
                 ->where('iol.c_orderline_id', $line->c_orderline_id)
-                ->whereIn('io.docstatus', ['DR', 'IP', 'CO'])
-                ->where('io.issotrx', 'Y')
+                ->whereIn('io.docstatus', $customerShipmentConfig['statuses']['delivery_progress'])
+                ->where('io.issotrx', $customerShipmentConfig['defaults']['is_so_trx'])
                 ->sum('iol.movementqty');
 
             $qtyBalance = $line->qtyordered - $deliveredQty;
@@ -571,6 +575,7 @@ class CustomerShipmentController extends Controller
 
     public function store(Request $request)
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
         // 1. Validate Form Input
         $validated = $request->validate([
             'org_id' => 'required',
@@ -584,6 +589,8 @@ class CustomerShipmentController extends Controller
             'deliveryviarule' => 'nullable|string|in:D,P,S',
             'freightcostrule' => 'nullable|string|in:C,F,I,U',
             'm_shipper_id' => 'nullable|integer',
+            'a_asset_id' => 'nullable|integer',
+            'salesrep_id' => 'nullable|integer',
         ]);
 
         // Get Context
@@ -619,17 +626,24 @@ class CustomerShipmentController extends Controller
             'MovementDate' => $movementDate,
             'AD_User_ID' => (int) $sessionUserId,
             'C_BPartner_ID' => (int) $validated['c_bpartner_id'],
-            'IsSOTrx' => true,
-            'MovementType' => 'C-',
+            'IsSOTrx' => $customerShipmentConfig['defaults']['is_so_trx'] === 'Y',
+            'MovementType' => $customerShipmentConfig['defaults']['movement_type'],
             'IsActive' => true,
             'POReference' => $validated['shipment_reference'] ?? null,
             'C_DocType_ID' => !empty($validated['c_doctype_id']) ? (int) $validated['c_doctype_id'] : null,
-            'DeliveryViaRule' => $validated['deliveryviarule'] ?? 'D',
-            'FreightCostRule' => $validated['freightcostrule'] ?? 'I',
+            'DeliveryViaRule' => $validated['deliveryviarule'] ?? $customerShipmentConfig['defaults']['delivery_via_rule'],
+            'FreightCostRule' => $validated['freightcostrule'] ?? $customerShipmentConfig['defaults']['freight_cost_rule'],
         ];
 
         if (!empty($validated['m_shipper_id']) && ($validated['deliveryviarule'] ?? '') === 'S') {
             $payload['M_Shipper_ID'] = (int) $validated['m_shipper_id'];
+        }
+
+        if (!empty($validated['a_asset_id'])) {
+            $payload['A_Asset_ID'] = (int) $validated['a_asset_id'];
+        }
+        if (!empty($validated['salesrep_id'])) {
+            $payload['SalesRep_ID'] = (int) $validated['salesrep_id'];
         }
 
         // BPartner Location
@@ -693,6 +707,8 @@ class CustomerShipmentController extends Controller
             'deliveryviarule' => 'nullable|string|in:D,P,S',
             'freightcostrule' => 'nullable|string|in:C,F,I,U',
             'm_shipper_id' => 'nullable|integer',
+            'a_asset_id' => 'nullable|integer',
+            'salesrep_id' => 'nullable|integer',
         ]);
 
         $payload = [];
@@ -716,8 +732,13 @@ class CustomerShipmentController extends Controller
             $payload['FreightCostRule'] = $validated['freightcostrule'];
         if (!empty($validated['m_shipper_id']) && ($validated['deliveryviarule'] ?? '') === 'S') {
             $payload['M_Shipper_ID'] = (int) $validated['m_shipper_id'];
-        } elseif (isset($validated['deliveryviarule']) && $validated['deliveryviarule'] !== 'S') {
-            $payload['M_Shipper_ID'] = null;
+        }
+
+        if (!empty($validated['a_asset_id'])) {
+            $payload['A_Asset_ID'] = (int) $validated['a_asset_id'];
+        }
+        if (!empty($validated['salesrep_id'])) {
+            $payload['SalesRep_ID'] = (int) $validated['salesrep_id'];
         }
 
         if (!empty($validated['movement_date'])) {
@@ -742,6 +763,7 @@ class CustomerShipmentController extends Controller
 
     public function process(Request $request)
     {
+        $customerShipmentConfig = config('idempiere.customer-shipment');
         $validated = $request->validate([
             'document_id' => 'required',
             'doc_action' => 'required|in:CO,PR,VO,CL,RE',
@@ -788,8 +810,8 @@ class CustomerShipmentController extends Controller
                                 'MovementDate' => $originalDoc->movementdate,
                                 'C_BPartner_ID' => $originalDoc->c_bpartner_id,
                                 'C_BPartner_Location_ID' => $originalDoc->c_bpartner_location_id,
-                                'IsSOTrx' => true,
-                                'MovementType' => 'C-',
+                                'IsSOTrx' => $customerShipmentConfig['defaults']['is_so_trx'] === 'Y',
+                                'MovementType' => $customerShipmentConfig['defaults']['movement_type'],
                                 'IsActive' => true,
                                 'POReference' => $originalDoc->poreference,
                                 'C_DocType_ID' => $originalDoc->c_doctype_id,
@@ -1142,6 +1164,7 @@ class CustomerShipmentController extends Controller
     public function exportJournals($id)
     {
         try {
+            $customerShipmentConfig = config('idempiere.customer-shipment');
             $decryptedId = Crypt::decryptString($id);
             $receipt = \App\Models\Idempiere\CInOut::findOrFail($decryptedId);
 
@@ -1154,7 +1177,7 @@ class CustomerShipmentController extends Controller
                     \Illuminate\Support\Facades\DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                     \Illuminate\Support\Facades\DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                 )
-                ->where('fa.ad_table_id', 319) // 319 is M_InOut
+                ->where('fa.ad_table_id', $customerShipmentConfig['journals']['table_id'])
                 ->where('fa.record_id', $receipt->m_inout_id)
                 ->orderBy('fa.fact_acct_id')
                 ->get();

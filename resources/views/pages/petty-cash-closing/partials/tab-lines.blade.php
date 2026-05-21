@@ -252,7 +252,7 @@
                                         <input 
                                             type="checkbox"
                                             class="line-checkbox w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
-                                            value="{{ $line->dpk_pettycash_closingline_id }}"
+                                            value="{{ $line->adw_pettycash_closingline_id }}"
                                             onchange="updateDeleteButtonState()">
                                     </td>
                                 @endif
@@ -284,7 +284,7 @@
                                             </button>
                                             <button 
                                                 type="button"
-                                                onclick="deleteLine({{ $line->dpk_pettycash_closingline_id }})"
+                                                onclick="deleteLine({{ $line->adw_pettycash_closingline_id }})"
                                                 class="mr-4 bg-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-sm transition-colors p-1"
                                                 title="Delete">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -470,7 +470,7 @@ function editLine(lineData) {
     var lineAmountEl = document.getElementById('line_amount');
     var lineNameEl = document.getElementById('line_name');
 
-    if (lineIdEl) lineIdEl.value = lineData.dpk_pettycash_closingline_id;
+    if (lineIdEl) lineIdEl.value = lineData.adw_pettycash_closingline_id;
     if (lineDescEl) lineDescEl.value = lineData.description || '';
     if (lineAmountEl) {
         lineAmountEl.value = lineData.amount || '';
@@ -483,12 +483,12 @@ function editLine(lineData) {
     // Request Info logic
     var reqInfoContainer = document.getElementById('requisition_info_container');
     var reqInfoText = document.getElementById('requisition_info_text');
-    if (lineData.dpk_pettycash_requestline_id && lineData.request_documentno) {
+    if (lineData.adw_pettycash_requestline_id && lineData.request_documentno) {
         reqInfoContainer.classList.remove('hidden');
         reqInfoText.textContent = lineData.request_documentno + ' Line No - ' + (lineData.request_line || '-');
-    } else if (lineData.dpk_pettycash_requestline_id) {
+    } else if (lineData.adw_pettycash_requestline_id) {
         reqInfoContainer.classList.remove('hidden');
-        reqInfoText.textContent = 'Linked to Request Line ID: ' + lineData.dpk_pettycash_requestline_id;
+        reqInfoText.textContent = 'Linked to Request Line ID: ' + lineData.adw_pettycash_requestline_id;
     } else {
         reqInfoContainer.classList.add('hidden');
         reqInfoText.textContent = '';
@@ -843,12 +843,12 @@ function loadRequestLines(page, search = null) {
 function renderRequestTable(lines) {
     let html = '';
     lines.forEach(l => {
-        let isChecked = reqSelectedLines.has(l.dpk_pettycash_requestline_id) ? 'checked' : '';
+        let isChecked = reqSelectedLines.has(l.adw_pettycash_requestline_id) ? 'checked' : '';
         let lineData = encodeURIComponent(JSON.stringify(l));
         let qtyStr = l.qty ? l.qty : '-';
         html += `
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                <td class="px-4 py-3"><input type="checkbox" class="req-line-checkbox w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600" value="${l.dpk_pettycash_requestline_id}" ${isChecked} onchange="toggleReqLineSelection(this, '${lineData}')"></td>
+                <td class="px-4 py-3"><input type="checkbox" class="req-line-checkbox w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600" value="${l.adw_pettycash_requestline_id}" ${isChecked} onchange="toggleReqLineSelection(this, '${lineData}')"></td>
                 <td class="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium">${l.value || l.name || '-'}</td>
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title="${l.description || ''}">${l.description || '-'}</td>
                 <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white font-mono">${formatAmountModal(l.amount)}</td>

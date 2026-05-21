@@ -126,6 +126,10 @@
         .totals-label {
             font-weight: bold;
         }
+        .totals-grand-total td {
+            border-top: 0px solid #000;
+            padding-top: 6px;
+        }
         
         /* Notes */
         .notes-section {
@@ -139,6 +143,9 @@
         .notes-content {
             margin-bottom: 15px;
             white-space: pre-wrap;
+            text-align: left;
+            border: none;
+            padding: 10px;
         }
         
         /* General Provision */
@@ -193,226 +200,259 @@
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <table class="header-table">
-        <tr>
-            <td width="15%" align="center">
-                @if(!empty($logoBase64))
-                    <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 60px; width: auto;">
-                @else
-                    <!-- CSS Logo representing the yellow D -->
-                    <div class="logo-box">D</div>
-                @endif
-            </td>
-            <td width="85%" align="center">
-                <div class="company-name">PT DHARMAMULIA PRIMA KARYA</div>
-                <div class="company-address">  
-                    Jalan Jogja-Solo KM 12,5, Padukuhan Karang Kalasan, RT 001/RW 006 Kelurahan Tirtomartani,<br>
-                    Kecamatan Kalasan, Kabupaten Sleman, Daerah Istimewa Yogyakarta Telp. 0274 – 2850888, Fax. 0274 – 497468
-                </div>
-            </td>
-        </tr>
-    </table>
-    <div style="text-align: right; font-size: 8pt; margin-top: 2px;">Page 1 / 1</div>
-
-    <div class="doc-title">Purchase Order</div>
-
-    <!-- Info Box -->
-    <div class="info-container">
-        <table class="info-table">
-            <tr>
-                <!-- Left Column -->
-                <td width="50%">
-                    <table>
-                        <tr>
-                            <td class="info-label">Order to</td>
-                            <td class="colon">:</td>
-                            <td><strong>{{ $vendor->vendor_name }}</strong></td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Address</td>
-                            <td class="colon">:</td>
-                            <td>
-                                {{ $vendor->address1 }}<br>
-                                {{ $vendor->address2 }} {{ $vendor->city }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Contact Person</td>
-                            <td class="colon">:</td>
-                            <td>{{ $vendor->contact_name ?? '-' }}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Phone</td>
-                            <td class="colon">:</td>
-                            <td>{{ $vendor->phone ?? '-' }}</td>
-                        </tr>
-                    </table>
-                </td>
-                <!-- Right Column -->
-                <td width="50%" style="border-left: 1px solid #000; padding-left: 10px;">
-                    <table>
-                        <tr>
-                            <td class="info-label">PO Number</td>
-                            <td class="colon">:</td>
-                            <td>{{ $order->documentno }}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Date</td>
-                            <td class="colon">:</td>
-                            <td>{{ \Carbon\Carbon::parse($order->dateordered)->format('d M Y') }}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Invoice To</td>
-                            <td class="colon">:</td>
-                            <td>
-                                <strong>Dharmamulia Prima Karya</strong><br>
-                                Jl. Jababeka IV-E No.81b
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="info-label" style="padding-top: 15px;">Payment Term</td>
-                            <td class="colon" style="padding-top: 15px;">:</td>
-                            <td style="padding-top: 15px;">{{ $paymentTerm }}</td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </div>
-
-    <!-- Items Table -->
-    <table class="items-table" cellspacing="0">
+    {{-- Wrapper table: thead repeats on every page (dompdf behavior) --}}
+    <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr>
-                <th width="5%">NO</th>
-                <th width="45%">Description</th>
-                <th width="10%" class="text-right">Qty</th>
-                <th width="10%">UOM</th>
-                <th width="15%" class="text-right">Price</th>
-                <th width="15%" class="text-right">Amount</th>
+                <td style="padding: 0;">
+                    <!-- Header -->
+                    <table class="header-table">
+                        <!-- Row 1: Company Address | Logo + Title -->
+                            <tr>
+                                <td style="border-bottom: 1px solid black; padding: 8px; width: 60%; vertical-align: top;">
+                                    <strong style="font-size: 13pt;">{{ $clientName ?? '' }}</strong><br>
+                                    @if(!empty($orgInfo))
+                                        @if(!empty($orgInfo->address1))<span style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
+                                        @if(!empty($orgInfo->address2))<span style="font-size: 9pt;">{{ $orgInfo->address2 }}</span><br>@endif
+                                        @if(!empty($orgInfo->address3))<span style="font-size: 9pt;">{{ $orgInfo->address3 }}</span>@endif
+                                    @endif
+                                </td>
+                                <td style="border-bottom: 1px solid black; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
+                                    @if(!empty($logoBase64))
+                                        <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;"><br>
+                                    @endif 
+                                </td>
+                            </tr>
+                    </table>
+                    <div style="text-align: right; font-size: 8pt; margin-top: 2px;">Page 1 / 1</div>
+
+                    <div class="doc-title">Purchase Order</div>
+
+                    <!-- Info Box -->
+                    <div class="info-container">
+                        <table class="info-table">
+                            <tr>
+                                <!-- Left Column -->
+                                <td width="50%">
+                                    <table>
+                                        <tr>
+                                            <td class="info-label">Order to</td>
+                                            <td class="colon">:</td>
+                                            <td><strong>{{ $vendor->vendor_name }}</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Address</td>
+                                            <td class="colon">:</td>
+                                            <td>
+                                                {{ $vendor->address1 }}<br>
+                                                {{ $vendor->address2 }} {{ $vendor->city }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Contact Person</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $vendor->contact_name ?? '-' }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Phone</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $vendor->phone ?? '-' }}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                                <!-- Right Column -->
+                                <td width="50%" style="border-left: 1px solid #000; padding-left: 10px;">
+                                    <table>
+                                        <tr>
+                                            <td class="info-label">PO Number</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $order->documentno }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Date</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ \Carbon\Carbon::parse($order->dateordered)->format('d M Y') }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Invoice To</td>
+                                            <td class="colon">:</td>
+                                            <td>
+                                                <strong>{{ $clientName ?? '' }}</strong><br>
+                                                @if(!empty($orgInfo))
+                                                    @if(!empty($orgInfo->address1)){{ $orgInfo->address1 }}<br>@endif
+                                                    @if(!empty($orgInfo->address2)){{ $orgInfo->address2 }}<br>@endif
+                                                    @if(!empty($orgInfo->address3)){{ $orgInfo->address3 }}@endif
+                                                @endif
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label" style="padding-top: 15px;">NPWP</td>
+                                            <td class="colon" style="padding-top: 15px;">:</td>
+                                            <td style="padding-top: 15px;">{{ $orgInfo->taxid ?? '-' }}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </td>
             </tr>
         </thead>
         <tbody>
-            @php $subTotal = 0; @endphp
-            @foreach($lines as $index => $line)
-                @php 
-                    $lineAmount = $line->qtyentered * $line->priceentered;
-                    $subTotal += $lineAmount;
-                @endphp
-                <tr>
-                    <td>{{ $index + 1 }}</td>
-                    <td>
-                        {{ $line->product_name }} {{ $line->product_value ? '- ' . $line->product_value : '' }}
-                        @if($line->description)
-                            <br><span style="color: #555;">{{ $line->description }}</span>
-                        @endif
-                    </td>
-                    <td class="qty">{{ number_format($line->qtyentered, 0) }}</td>
-                    <td>{{ $line->uomsymbol ?? $line->uom_name }}</td>
-                    <td class="price">{{ number_format($line->priceentered, 2) }}</td>
-                    <td class="amount">{{ number_format($lineAmount, 2) }}</td>
-                </tr>
-            @endforeach
-            <!-- Spacer to separate content from totals if needed -->
-             <tr><td colspan="6" class="border-top"></td></tr>
+            <tr>
+                <td style="padding: 0;">
+                    <!-- Items Table -->
+                    <table class="items-table" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th width="5%">NO</th>
+                                <th width="35%">Product</th>
+                                <th width="13%">Delivery</th>
+                                <th width="8%" style="text-align: right;">Qty</th>
+                                <th width="8%">UOM</th>
+                                <th width="15%" style="text-align: right;">Price</th>
+                                <th width="16%" style="text-align: right;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $subTotal = 0; @endphp
+                            @foreach($lines as $index => $line)
+                                @php
+                                    $lineAmount = $line->qtyentered * $line->priceentered;
+                                    $subTotal += $lineAmount;
+                                @endphp
+                                <tr>
+                                    <td>{{ $index + 1 }}</td>
+                                    <td>
+                                        {{ $line->product_value }}<br>
+                                        <span style="font-size: 8pt;">{{ $line->product_name }}</span>
+                                        @if($line->description)
+                                            <br><span style="font-size: 8pt; color: #555;">{{ $line->description }}</span>
+                                        @endif
+                                    </td>
+                                    <td>{{ !empty($line->datepromised) ? \Carbon\Carbon::parse($line->datepromised)->format('d M Y') : '' }}</td>
+                                    <td class="qty">{{ number_format($line->qtyentered, 0) }}</td>
+                                    <td>{{ $line->uomsymbol ?? $line->uom_name }}</td>
+                                    <td class="price">{{ number_format($line->priceentered, 2) }}</td>
+                                    <td class="amount">{{ number_format($lineAmount, 2) }}</td>
+                                </tr>
+                            @endforeach
+                            <tr><td colspan="7" class="border-top"></td></tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Totals + Notes -->
+                    <table style="width: 100%; margin-top: 5px;" cellspacing="0">
+                        <tr>
+                            <!-- Notes (left 60%) -->
+                            <td width="60%" style="vertical-align: top; padding-right: 10px;">
+                                <div class="notes-section" style="margin-top: 0;">
+                                    <strong>Note :</strong>
+                                    <div class="notes-content">{{ trim($order->description) }}</div>
+                                </div>
+                            </td>
+                            <!-- Totals (right 40%) -->
+                            <td width="40%" style="vertical-align: top;">
+                                <table class="totals-table" style="width: 100%;">
+                                    <tr>
+                                        <td class="totals-label">Total Amount :</td>
+                                        <td>{{ number_format($subTotal, 2) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="totals-label">
+                                            @if (isset($taxName) && $taxName)
+                                                @if (strtolower($taxName) == 'standard')
+                                                    PPN ({{ $taxRate }}%)
+                                                @else
+                                                    {{ $taxName }}
+                                                @endif
+                                            @else
+                                                Non PPN
+                                            @endif
+                                            :</td>
+                                        <td>{{ number_format($taxAmount ?? 0, 2) }}</td>
+                                    </tr>
+                                    @php $withholdingTotal = $withholdingTotal ?? 0; @endphp
+                                    @if($withholdingTotal > 0)
+                                    <tr>
+                                        <td class="totals-label">PPh23 :</td>
+                                        <td style="color: #c05621;">({{ number_format($withholdingTotal, 2) }})</td>
+                                    </tr>
+                                    @endif
+                                    <tr class="totals-grand-total">
+                                        <td class="totals-label">Grand Total :</td>
+                                        <td><strong>{{ number_format($subTotal + ($taxAmount ?? 0) - $withholdingTotal, 2) }}</strong></td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- General Provision + Signatures (page break if items > 5) -->
+                    @if(count($lines) > 5)
+                        <div style="page-break-before: always;"></div>
+                    @endif
+
+                    <div class="provision-section">
+                        <div>General Provision:</div>
+                        <ol class="provision-list" style="margin-top: 5px; padding-left: 20px;">
+                            <li>Payments will be scheduled every 28th after due.</li>
+                            <li>Good which are not meet with the requirement (specification and condition), will be returned.</li>
+                            <li>For payment purpose, please attach this purchase order in your invoice.</li>
+                            <li>Field this Purchase Order number in your delivery order.</li>
+                            <li>Invoice will be received at 10:00 - 15:00 PM every Monday &amp; Thursday.</li>
+                            <li>Delivery product will be received under 15:00 PM every work day.</li>
+                        </ol>
+                    </div>
+
+                    <!-- Signatures -->
+                    <table class="signature-table">
+                        <tr>
+                            <td>
+                                <div class="sig-title">Prepared By</div>
+                                @if(isset($preparedQr) && $preparedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $preparedQr }}" alt="QR" style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $preparedBy ?? '..................' }}</div>
+                                <div class="sig-role" style="font-weight: bold;">Purchasing</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $preparedDate ?? '' }})</div>
+                            </td>
+                            <td>
+                                <div class="sig-title">Checked By</div>
+                                @if(isset($checkedQr) && $checkedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $checkedQr }}" alt="QR" style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $checkedBy ?? '..................' }}</div>
+                                <div class="sig-role" style="font-weight: bold;">FAT</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $checkedDate ?? '' }})</div>
+                            </td>
+                            <td>
+                                <div class="sig-title">Approved By</div>
+                                @if(isset($approvedQr) && $approvedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $approvedQr }}" alt="QR" style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $approvedBy ?? '..................' }}</div>
+                                <div class="sig-role" style="font-weight: bold;">Director</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $approvedDate ?? '' }})</div>
+                            </td>
+                            <td>
+                                <div class="sig-title">&nbsp;</div>
+                                <div style="height: 65px;"></div>
+                                <div class="sig-name">&nbsp;</div>
+                                <div class="sig-role" style="font-weight: bold;">Supplier</div>
+                                <div style="font-size: 7pt; font-style: italic;">&nbsp;</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
         </tbody>
-    </table>
-
-    <!-- Totals -->
-    <table class="totals-table">
-        <tr>
-            <td width="70%"></td>
-            <td width="15%" class="totals-label">Sub Total :</td>
-            <td width="15%">{{ number_format($subTotal, 2) }}</td>
-        </tr>
-        <tr>
-            <td></td>
-            <td class="totals-label">
-                @if (isset($taxName) && $taxName)
-                    @if (strtolower($taxName) == 'standard')
-                         PPN ({{ $taxRate }}%)
-                    @else
-                         {{ $taxName }}
-                    @endif 
-                @else
-                    Non PPN
-                @endif 
-                :</td>
-            <td>{{ number_format($taxAmount ?? 0, 2) }}</td>
-        </tr>
-        <tr>
-            <td></td>
-            <td class="totals-label">Total :</td>
-            <td>{{ number_format($subTotal + ($taxAmount ?? 0), 2) }}</td>
-        </tr>
-    </table>
-
-    <!-- Notes -->
-    <div class="notes-section">
-        <strong>Note :</strong>
-        <div class="notes-content">
-            {{ $order->description }}
-        </div>
-    </div>
-
-    <!-- General Provision -->
-    <div class="provision-section">
-        <div>General Provision:</div>
-        <ol class="provision-list" style="margin-top: 5px; padding-left: 20px;">
-            <li>Payment will be due every 10 & 20 day of the month</li>
-            <li>Goods that do not meet the requirements (specifications and conditions) will be returned</li>
-            <li>The Service must be thoroughly checked by the vendor</li>
-            <li>Please fill in this purchase order number on your delivery order</li>
-            <li>All purchases of services will be subject to tax in accordance with the applicable regulations (PPh 23)</li>
-        </ol>
-    </div>
-
-    <!-- Signatures -->
-    <!-- Signatures -->
-    <table class="signature-table">
-        <tr>
-            <td>
-                <div class="sig-title">Prepared By</div>
-                @if(isset($preparedQr) && $preparedQr)
-                    <div style="margin-bottom: 5px;"><img src="{{ $preparedQr }}" alt="QR" style="height: 60px; width: 60px;"></div>
-                @else
-                    <div style="height: 65px;"></div>
-                @endif
-                <div class="sig-name">{{ $preparedBy ?? '..................' }}</div>
-                <div class="sig-role" style="font-weight: bold;">Purchasing</div>
-                <div style="font-size: 7pt; font-style: italic;">({{ $preparedDate ?? '' }})</div>
-            </td>
-            <td>
-                <div class="sig-title">Checked By</div>
-                @if(isset($checkedQr) && $checkedQr)
-                    <div style="margin-bottom: 5px;"><img src="{{ $checkedQr }}" alt="QR" style="height: 60px; width: 60px;"></div>
-                @else
-                    <div style="height: 65px;"></div>
-                @endif
-                <div class="sig-name">{{ $checkedBy ?? '..................' }}</div>
-                <div class="sig-role" style="font-weight: bold;">FAT</div>
-                <div style="font-size: 7pt; font-style: italic;">({{ $checkedDate ?? '' }})</div>
-            </td>
-            <td>
-                <div class="sig-title">Approved By</div>
-                @if(isset($approvedQr) && $approvedQr)
-                    <div style="margin-bottom: 5px;"><img src="{{ $approvedQr }}" alt="QR" style="height: 60px; width: 60px;"></div>
-                @else
-                    <div style="height: 65px;"></div>
-                @endif
-                <div class="sig-name">{{ $approvedBy ?? '..................' }}</div>
-                <div class="sig-role" style="font-weight: bold;">Director</div>
-                <div style="font-size: 7pt; font-style: italic;">({{ $approvedDate ?? '' }})</div>
-            </td>
-            <td>
-                <div class="sig-title">&nbsp;</div>
-                <div style="height: 65px;"></div>
-                <div class="sig-name">&nbsp;</div>
-                <div class="sig-role" style="font-weight: bold;">Supplier</div>
-                <div style="font-size: 7pt; font-style: italic;">&nbsp;</div>
-            </td>
-        </tr>
     </table>
 
 </body>

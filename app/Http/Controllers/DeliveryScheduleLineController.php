@@ -40,6 +40,9 @@ class DeliveryScheduleLineController extends Controller
 
     public function store(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+
         // Strip thousand-separator commas from numeric fields before validation
         $request->merge([
             'qty' => str_replace(',', '', $request->input('qty', '')),
@@ -87,9 +90,9 @@ class DeliveryScheduleLineController extends Controller
             }
 
             // Get max line number from existing lines
-            $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId) {
+                $linesResponse = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $baseUrl) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->get('https://idempiere.dpkgreenlog.id/api/v1/models/c_order/' . $orderId);
+                    ->get($baseUrl . '/models/c_order/' . $orderId);
             });
 
             $maxLine = 0;
@@ -114,7 +117,7 @@ class DeliveryScheduleLineController extends Controller
                 return back()->with('error', 'Organization ID not found in order');
             }
 
-            $nextLine = $maxLine + 10;
+            $nextLine = $maxLine + $deliveryScheduleConfig['limits']['line_increment'];
 
             // Prepare payload for iDempiere API
             $payload = [
@@ -141,9 +144,9 @@ class DeliveryScheduleLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload, $baseUrl) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/c_order/' . $orderId, $payload);
+                    ->put($baseUrl . '/models/c_order/' . $orderId, $payload);
             });
 
             if (!$response->successful()) {
@@ -201,6 +204,8 @@ class DeliveryScheduleLineController extends Controller
 
     public function update(Request $request)
     {
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+
         // Strip thousand-separator commas from numeric fields before validation
         $request->merge([
             'qty' => str_replace(',', '', $request->input('qty', '')),
@@ -309,9 +314,9 @@ class DeliveryScheduleLineController extends Controller
                 'payload' => $payload
             ]);
 
-            $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($validated, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($validated, $payload, $baseUrl) {
                 return \Illuminate\Support\Facades\Http::withToken($t)
-                    ->put('https://idempiere.dpkgreenlog.id/api/v1/models/c_orderline/' . $validated['line_id'], $payload);
+                    ->put($baseUrl . '/models/c_orderline/' . $validated['line_id'], $payload);
             });
 
             if (!$response->successful()) {
@@ -378,6 +383,8 @@ class DeliveryScheduleLineController extends Controller
 
     public function delete(Request $request)
     {
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+
         $validated = $request->validate([
             'line_ids' => 'required|array',
             'line_ids.*' => 'required|integer',
@@ -404,9 +411,9 @@ class DeliveryScheduleLineController extends Controller
                     ->where('c_orderline_id', $lineId)
                     ->first(['qtyscheduled', 'qtyentered', 'ref_orderline_id']);
 
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($lineId) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($lineId, $baseUrl) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->delete('https://idempiere.dpkgreenlog.id/api/v1/models/c_orderline/' . $lineId);
+                    ->delete($baseUrl . '/models/c_orderline/' . $lineId);
                 });
 
                 if ($response->successful()) {
@@ -546,6 +553,9 @@ class DeliveryScheduleLineController extends Controller
 
     public function import(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:5120', // 5MB
             'document_id' => 'required',
@@ -589,7 +599,7 @@ class DeliveryScheduleLineController extends Controller
             $imported = 0;
             $failed = 0;
             $failedRows = []; // Store failed rows with error messages
-            $lineIncrement = 10;
+            $lineIncrement = $deliveryScheduleConfig['limits']['line_increment'];
             $totalRows = 0;
 
             foreach ($rows as $index => $row) {
@@ -680,9 +690,9 @@ class DeliveryScheduleLineController extends Controller
                     ]
                 ];
 
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload, $baseUrl) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->put('https://idempiere.dpkgreenlog.id/api/v1/models/c_order/' . $orderId, $payload);
+                    ->put($baseUrl . '/models/c_order/' . $orderId, $payload);
                 });
 
                 if ($response->successful()) {
@@ -770,6 +780,9 @@ class DeliveryScheduleLineController extends Controller
 
     public function storeFromSO(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+        $baseUrl = rtrim((string) config('idempiere.api.base_url'), '/');
+
         \Illuminate\Support\Facades\Log::info('StoreFromSO payload: ', $request->all());
         $validated = $request->validate([
             'document_id' => 'required',
@@ -834,7 +847,7 @@ class DeliveryScheduleLineController extends Controller
                     }
                 }
 
-                $maxLine += 10;
+                $maxLine += $deliveryScheduleConfig['limits']['line_increment'];
                 $price = $lineData['priceactual'] ?? 0;
 
                 // Step 1: Create the line via API with minimal fields
@@ -867,9 +880,9 @@ class DeliveryScheduleLineController extends Controller
                     'payload' => $payload
                 ]);
 
-                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload) {
+                $response = \App\Services\IdempiereService::withAutoRetry(function($t) use ($orderId, $payload, $baseUrl) {
                     return \Illuminate\Support\Facades\Http::withToken($t)
-                        ->put('https://idempiere.dpkgreenlog.id/api/v1/models/c_order/' . $orderId, $payload);
+                    ->put($baseUrl . '/models/c_order/' . $orderId, $payload);
                 }); 
 
                 if ($response->successful()) {

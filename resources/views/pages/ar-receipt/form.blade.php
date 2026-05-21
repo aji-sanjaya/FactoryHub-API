@@ -3,11 +3,23 @@
 @section('content')
 
     @php
+        $arReceiptConfig = config('idempiere.ar-receipt');
+        $statusConfig = $arReceiptConfig['statuses'] ?? [];
+        $workflowConfig = $arReceiptConfig['workflow'] ?? [];
         $isNew      = is_null($payment);
         $activeTab  = $activeTab ?? 'header';
         $docNo      = $isNew ? '** New **' : $payment->documentno;
         $docIdParam = request('document_id');
-        $isReadOnly = !$isNew && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $readOnlyStatuses = $statusConfig['read_only'] ?? ['CO', 'CL', 'VO', 'RE'];
+        $draftStatus = $statusConfig['draft'] ?? 'DR';
+        $inProgressStatus = $statusConfig['in_progress'] ?? 'IP';
+        $completeFromStatuses = $workflowConfig['complete_from'] ?? [$draftStatus, $inProgressStatus];
+        $voidFromStatuses = $workflowConfig['void_from'] ?? [$draftStatus];
+        $reverseFromStatuses = $workflowConfig['reverse_from'] ?? ['CO'];
+        $closeFromStatuses = $workflowConfig['close_from'] ?? ['CO'];
+        $invoiceLookupMinSearchLength = $arReceiptConfig['limits']['invoice_lookup_min_search_length'] ?? 3;
+        $openInvoicesPerPage = $arReceiptConfig['limits']['open_invoices_per_page'] ?? 20;
+        $isReadOnly = !$isNew && in_array($payment->docstatus, $readOnlyStatuses);
     @endphp
 
     <div>
@@ -139,8 +151,8 @@
                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Select an action to perform on this document</p>
                 </div>
                 <div class="px-6 py-5 space-y-3">
-                    @php $cs = $payment->docstatus ?? 'DR'; @endphp
-                    @if(in_array($cs, ['DR', 'IN']))
+                    @php $cs = $payment->docstatus ?? $draftStatus; @endphp
+                    @if(in_array($cs, $completeFromStatuses))
                         <button onclick="processDocument('CO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
@@ -152,7 +164,7 @@
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'DR')
+                    @if(in_array($cs, $voidFromStatuses))
                         <button onclick="processDocument('VO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
@@ -164,7 +176,7 @@
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'CO')
+                    @if(in_array($cs, $reverseFromStatuses))
                         <button onclick="processDocument('RC')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:border-orange-800 dark:hover:bg-orange-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
@@ -175,16 +187,18 @@
                                 <div class="text-xs text-orange-600 dark:text-orange-400">Reverse this completed payment</div>
                             </div>
                         </button>
-                        <button onclick="processDocument('CL')"
-                            class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800/80 transition-colors">
-                            <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-sm font-medium text-gray-800 dark:text-gray-300">Close</div>
-                                <div class="text-xs text-gray-600 dark:text-gray-400">Close this payment document</div>
-                            </div>
-                        </button>
+                        @if(in_array($cs, $closeFromStatuses))
+                            <button onclick="processDocument('CL')"
+                                class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800/80 transition-colors">
+                                <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-medium text-gray-800 dark:text-gray-300">Close</div>
+                                    <div class="text-xs text-gray-600 dark:text-gray-400">Close this payment document</div>
+                                </div>
+                            </button>
+                        @endif
                     @endif
                 </div>
                 <div class="px-6 pb-5">
@@ -446,6 +460,8 @@
             const SEARCH_URL = '{{ route("ar-receipt.api.open-invoices") }}';
             const ALLOCATE_URL = '{{ route("ar-receipt.allocate.store") }}';
             const DELETE_URL = '{{ route("ar-receipt.allocate.delete") }}';
+            const OPEN_INVOICES_PER_PAGE = {{ $openInvoicesPerPage }};
+            const INVOICE_LOOKUP_MIN_SEARCH_LENGTH = {{ $invoiceLookupMinSearchLength }};
 
             let invSearchTimer = null;
             let invCurrentPage = 1;
@@ -527,7 +543,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
                         <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Search to find invoices</p>
-                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Enter at least 3 characters in the search box above</p>
+                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Enter at least ${INVOICE_LOOKUP_MIN_SEARCH_LENGTH} characters in the search box above</p>
                     </td></tr>`;
                 }
                 
@@ -561,13 +577,12 @@
                 const tbody = document.getElementById('inv_table_body');
                 if (!tbody) return;
                 
-                // Require minimum 3 characters to search
-                if (!invSearchQuery || invSearchQuery.trim().length < 3) {
+                if (!invSearchQuery || invSearchQuery.trim().length < INVOICE_LOOKUP_MIN_SEARCH_LENGTH) {
                     tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-12 text-center">
                         <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Enter at least 3 characters to search</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Enter at least ${INVOICE_LOOKUP_MIN_SEARCH_LENGTH} characters to search</p>
                         <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Type invoice number or keyword to find invoices</p>
                     </td></tr>`;
                     document.getElementById('inv_pagination_info').innerHTML = '';
@@ -578,7 +593,7 @@
                 tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-xs text-gray-500">Loading...</td></tr>';
 
                 axios.get(SEARCH_URL, {
-                    params: { document_id: docIdParam, q: invSearchQuery, page }
+                    params: { document_id: docIdParam, q: invSearchQuery, page, per_page: OPEN_INVOICES_PER_PAGE }
                 }).then(res => {
                     const data = res.data;
 

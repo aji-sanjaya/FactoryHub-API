@@ -1,6 +1,9 @@
 {{-- Allocate Tab (linking AR Invoices to this payment) --}}
 @php
-    $isReadOnly = !is_null($payment) && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']);
+    $arReceiptConfig = config('idempiere.ar-receipt');
+    $readOnlyStatuses = $arReceiptConfig['statuses']['read_only'] ?? ['CO', 'CL', 'VO', 'RE'];
+    $invoiceLookupMinSearchLength = $arReceiptConfig['limits']['invoice_lookup_min_search_length'] ?? 3;
+    $isReadOnly = !is_null($payment) && in_array($payment->docstatus, $readOnlyStatuses);
     $canEdit = !$isReadOnly;
     $encDocId = $docIdParam;
 @endphp
@@ -309,7 +312,7 @@
 
                 {{-- Search Bar --}}
                 <div class="px-6 py-3 border-b border-gray-100 dark:border-gray-700 flex gap-3">
-                    <input type="text" id="inv_search_input" placeholder="Search by Invoice No (min. 3 characters)..."
+                    <input type="text" id="inv_search_input" placeholder="Search by Invoice No (min. {{ $invoiceLookupMinSearchLength }} characters)..."
                         oninput="debounceInvSearch()"
                         class="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300">
                 </div>

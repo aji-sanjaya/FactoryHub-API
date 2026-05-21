@@ -39,8 +39,8 @@ class COrder extends Model
         'grandtotal',
         'freightamt',
         'chargeamt',
-        'dpk_ad_user_checked_id',
-        'dpk_ad_user_approved_id',
+        'adw_ad_user_checked_id',
+        'adw_ad_user_approved_id',
         'priorityrule',
         'invoicerule',
         'deliveryrule',
@@ -51,6 +51,17 @@ class COrder extends Model
         'bill_user_id',
         'bill_bpartner_id',
         'bill_location_id',
+        // Withholding Tax (PPh23)
+        'iswithholding',
+        'withholdingtype_id',
+        'withholdingrate',
+        'withholdingamount',
+    ];
+
+    protected $casts = [
+        'iswithholding'     => 'boolean',
+        'withholdingrate'   => 'float',
+        'withholdingamount' => 'float',
     ];
 
     // Accessors

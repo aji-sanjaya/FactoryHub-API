@@ -24,6 +24,8 @@ class ArInvoiceController extends Controller
 
     public function index()
     {
+        $arInvoiceConfig = config('idempiere.ar-invoice');
+
         if (!Session::has('api_token')) {
             return redirect()->route('signin');
         }
@@ -33,18 +35,18 @@ class ArInvoiceController extends Controller
         }
 
         $perPage = request()->get('per_page', 10);
-        $status = request()->get('status', ['DR', 'CO']);
+        $status = request()->get('status', $arInvoiceConfig['statuses']['default_list']);
         $search = request()->get('search', '');
 
         $clientId = Session::get('idempiere_client');
 
         $query = CInvoice::where('c_invoice.ad_client_id', $clientId)
-            ->where('c_invoice.issotrx', 'Y')
+            ->where('c_invoice.issotrx', $arInvoiceConfig['defaults']['is_so_trx'])
             ->where('c_invoice.isactive', 'Y');
 
         // Filter to AR Invoice doc base type (API) via join
         $query->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_invoice.c_doctype_id')
-            ->where('dt.docbasetype', 'ARI')
+            ->where('dt.docbasetype', $arInvoiceConfig['doc_types']['base_type'])
             ->select('c_invoice.*');
 
         if ($status !== 'all' && !empty($status)) {
@@ -59,15 +61,15 @@ class ArInvoiceController extends Controller
         $invoices = $query->paginate($perPage);
 
         $baseQuery = CInvoice::where('c_invoice.ad_client_id', $clientId)
-            ->where('c_invoice.issotrx', 'Y')
+            ->where('c_invoice.issotrx', $arInvoiceConfig['defaults']['is_so_trx'])
             ->where('c_invoice.isactive', 'Y')
             ->join('c_doctype as dt', 'dt.c_doctype_id', '=', 'c_invoice.c_doctype_id')
-            ->where('dt.docbasetype', 'ARI');
+            ->where('dt.docbasetype', $arInvoiceConfig['doc_types']['base_type']);
 
         $countAll = (clone $baseQuery)->count();
-        $countDraft = (clone $baseQuery)->where('c_invoice.docstatus', 'DR')->count();
-        $countInProgress = (clone $baseQuery)->where('c_invoice.docstatus', 'IP')->count();
-        $countCompleted = (clone $baseQuery)->whereIn('c_invoice.docstatus', ['CO', 'CL'])->count();
+        $countDraft = (clone $baseQuery)->where('c_invoice.docstatus', $arInvoiceConfig['statuses']['draft'])->count();
+        $countInProgress = (clone $baseQuery)->where('c_invoice.docstatus', $arInvoiceConfig['statuses']['in_progress'])->count();
+        $countCompleted = (clone $baseQuery)->whereIn('c_invoice.docstatus', $arInvoiceConfig['statuses']['completed'])->count();
 
         if (request()->ajax()) {
             return response()->json([
@@ -89,6 +91,8 @@ class ArInvoiceController extends Controller
 
     private function showForm($docId)
     {
+        $arInvoiceConfig = config('idempiere.ar-invoice');
+
         $invoice = null;
         if ($docId !== 'new') {
             try {
@@ -124,19 +128,19 @@ class ArInvoiceController extends Controller
         $customers = DB::connection('idempiere')->select("
             SELECT c_bpartner_id AS id, name AS text
             FROM c_bpartner
-            WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer='Y'
-            ORDER BY name LIMIT 200
-        ", [$clientId]);
+            WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer=?
+            ORDER BY name LIMIT {$arInvoiceConfig['limits']['customer_search']}
+        ", [$clientId, $arInvoiceConfig['filters']['is_customer']]);
 
         // Doc Types for AR Invoice
         $docTypes = DB::connection('idempiere')->select("
             SELECT dt.c_doctype_id AS id, dt.name AS text
             FROM c_doctype dt
             WHERE dt.isactive = 'Y'
-            AND dt.docbasetype = 'ARI'
+            AND dt.docbasetype = ?
             AND dt.ad_client_id = ?
             ORDER BY dt.c_doctype_id ASC
-        ", [$clientId]);
+        ", [$arInvoiceConfig['doc_types']['base_type'], $clientId]);
 
         // Payment Terms
         $paymentTerms = DB::connection('idempiere')->select("
@@ -230,7 +234,7 @@ class ArInvoiceController extends Controller
         $defaultCurrencyId = null;
         $idrCurrency = DB::connection('idempiere')
             ->table('c_currency')
-            ->where('iso_code', 'IDR')
+            ->where('iso_code', $arInvoiceConfig['defaults']['currency_iso_code'])
             ->where('isactive', 'Y')
             ->first();
         if ($idrCurrency) {
@@ -279,8 +283,8 @@ class ArInvoiceController extends Controller
                 ? \Carbon\Carbon::parse($invoice->dateacct)->format('Y-m-d')
                 : date('Y-m-d'),
             'docIdParam' => request('document_id'),
-            'isReadOnly' => $invoice && in_array($invoice->docstatus, ['CO', 'CL', 'VO', 'RE']),
-            'isDraft' => $invoice && $invoice->docstatus === 'DR',
+            'isReadOnly' => $invoice && in_array($invoice->docstatus, $arInvoiceConfig['statuses']['read_only']),
+            'isDraft' => $invoice && $invoice->docstatus === $arInvoiceConfig['statuses']['draft'],
             'activeTab' => request('tab', 'header'),
             'hasActiveWorkflow' => $hasActiveWorkflow,
             'docTypeId' => $invoice ? $invoice->c_doctype_id : $defaultDocTypeId,
@@ -336,7 +340,7 @@ class ArInvoiceController extends Controller
                             DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                             DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                         )
-                        ->where('fa.ad_table_id', 318) // 318 is C_Invoice
+                        ->where('fa.ad_table_id', $arInvoiceConfig['journals']['table_id'])
                         ->where('fa.record_id', $invoice->c_invoice_id)
                         ->orderBy('fa.fact_acct_id')
                         ->paginate(10)
@@ -357,6 +361,8 @@ class ArInvoiceController extends Controller
 
     public function store(Request $request)
     {
+        $arInvoiceConfig = config('idempiere.ar-invoice');
+
         $validated = $request->validate([
             'org_id' => 'required',
             'c_bpartner_id' => 'required',
@@ -403,7 +409,7 @@ class ArInvoiceController extends Controller
             ->table('m_pricelist')
             ->where('ad_client_id', $sessionClientId)
             ->where('isactive', 'Y')
-            ->where('issopricelist', 'N')
+            ->where('issopricelist', $arInvoiceConfig['filters']['price_list_is_so_price_list'])
             ->orderBy('m_pricelist_id', 'asc')
             ->first();
 
@@ -427,7 +433,7 @@ class ArInvoiceController extends Controller
             'DateInvoiced' => $validated['invoice_date'],
             'DueDate' => $validated['due_date'],
             'DateAcct' => $validated['date_acct'] ?? $validated['invoice_date'],
-            'IsSOTrx' => 'Y',
+            'IsSOTrx' => $arInvoiceConfig['defaults']['is_so_trx'],
             'C_BPartner_ID' => $bpartnerId,
             'C_Currency_ID' => (int) $validated['c_currency_id'],
             'C_PaymentTerm_ID' => (int) $validated['c_paymentterm_id'],
@@ -718,6 +724,8 @@ class ArInvoiceController extends Controller
 
     public function destroy(Request $request)
     {
+        $arInvoiceConfig = config('idempiere.ar-invoice');
+
         $validated = $request->validate(['document_id' => 'required']);
 
         try {
@@ -733,7 +741,7 @@ class ArInvoiceController extends Controller
                 return response()->json(['message' => 'AR Invoice not found.'], 404);
             }
 
-            if ($invoice->docstatus !== 'DR') {
+            if ($invoice->docstatus !== $arInvoiceConfig['statuses']['draft']) {
                 return response()->json(['message' => 'Only Draft invoices can be deleted.'], 422);
             }
 
@@ -854,6 +862,7 @@ class ArInvoiceController extends Controller
     public function exportJournals($id)
     {
         try {
+            $arInvoiceConfig = config('idempiere.ar-invoice');
             $decryptedId = Crypt::decryptString($id);
             $invoice = CInvoice::findOrFail($decryptedId);
 
@@ -866,7 +875,7 @@ class ArInvoiceController extends Controller
                     DB::raw('COALESCE(fa.amtacctdr, 0) as amt_acct_dr'),
                     DB::raw('COALESCE(fa.amtacctcr, 0) as amt_acct_cr')
                 )
-                ->where('fa.ad_table_id', 318) // 318 is C_Invoice
+                ->where('fa.ad_table_id', $arInvoiceConfig['journals']['table_id'])
                 ->where('fa.record_id', $invoice->c_invoice_id)
                 ->orderBy('fa.fact_acct_id')
                 ->get();
@@ -926,10 +935,12 @@ class ArInvoiceController extends Controller
     // API: Get Shipment Lines for "From Shipment" modal
     public function getShipmentLines(Request $request)
     {
+        $arInvoiceConfig = config('idempiere.ar-invoice');
         $clientId = Session::get('idempiere_client');
         $search = $request->get('q', '');
         $page = $request->get('page', 1);
-        $perPage = 15;
+        $perPage = $arInvoiceConfig['limits']['shipment_lines_per_page'];
+        $excludedStatusesSql = implode("','", array_map(static fn ($status) => str_replace("'", "''", $status), $arInvoiceConfig['statuses']['excluded_invoiced']));
 
         $documentId = $request->get('document_id');
         if (!$documentId) {
@@ -970,7 +981,7 @@ class ArInvoiceController extends Controller
             ]);
         }
 
-        if (strlen($search) < 2) {
+        if (strlen($search) < $arInvoiceConfig['limits']['lookup_min_search_length']) {
             return response()->json([
                 'results' => [],
                 'pagination' => ['more' => false],
@@ -987,16 +998,16 @@ class ArInvoiceController extends Controller
             ->leftJoin('c_orderline as ol', 'ol.c_orderline_id', '=', 'il.c_orderline_id')
             ->where('io.ad_client_id', $clientId)
             ->where('io.c_bpartner_id', (int) $customerId) // Mandatory customer filter
-            ->where('io.docstatus', 'CO')         // Completed shipments only
-            ->where('io.movementtype', 'C-')       // Customer shipments
-            ->where('io.issotrx', 'Y')
+            ->where('io.docstatus', $arInvoiceConfig['shipment_filters']['doc_status'])
+            ->where('io.movementtype', $arInvoiceConfig['shipment_filters']['movement_type'])
+            ->where('io.issotrx', $arInvoiceConfig['shipment_filters']['is_so_trx'])
             // Exclude lines already fully invoiced
-            ->whereRaw("il.movementqty - COALESCE((SELECT SUM(inl.qtyinvoiced) FROM c_invoiceline inl JOIN c_invoice i ON i.c_invoice_id = inl.c_invoice_id WHERE i.docstatus NOT IN ('VO','RE') AND inl.m_inoutline_id = il.m_inoutline_id), 0) > 0")
+            ->whereRaw("il.movementqty - COALESCE((SELECT SUM(inl.qtyinvoiced) FROM c_invoiceline inl JOIN c_invoice i ON i.c_invoice_id = inl.c_invoice_id WHERE i.docstatus NOT IN ('{$excludedStatusesSql}') AND inl.m_inoutline_id = il.m_inoutline_id), 0) > 0")
             ->select(
                 'il.m_inoutline_id as id',
                 'il.c_orderline_id',
                 'il.movementqty as qty',
-                DB::raw("(il.movementqty - COALESCE((SELECT SUM(inl.qtyinvoiced) FROM c_invoiceline inl JOIN c_invoice i ON i.c_invoice_id = inl.c_invoice_id WHERE i.docstatus NOT IN ('VO','RE') AND inl.m_inoutline_id = il.m_inoutline_id), 0)) as remaining_qty"),
+                DB::raw("(il.movementqty - COALESCE((SELECT SUM(inl.qtyinvoiced) FROM c_invoiceline inl JOIN c_invoice i ON i.c_invoice_id = inl.c_invoice_id WHERE i.docstatus NOT IN ('{$excludedStatusesSql}') AND inl.m_inoutline_id = il.m_inoutline_id), 0)) as remaining_qty"),
                 'il.m_product_id',
                 'io.documentno as shipment_no',
                 'io.poreference',
@@ -1044,13 +1055,14 @@ class ArInvoiceController extends Controller
     // API: Get Shipment Lines for linking
     public function getShipmentLinesLink(Request $request)
     {
+        $arInvoiceConfig = config('idempiere.ar-invoice');
         $search = $request->get('q', '');
-        $perPage = 20;
+        $perPage = $arInvoiceConfig['limits']['shipment_link_per_page'];
         $page = $request->get('page', 1);
         $clientId = Session::get('idempiere_client');
         $customerId = $request->get('customer_id');
 
-        if (strlen($search) < 2) {
+        if (strlen($search) < $arInvoiceConfig['limits']['lookup_min_search_length']) {
             return response()->json([
                 'results' => [],
                 'pagination' => ['more' => false],
@@ -1064,9 +1076,9 @@ class ArInvoiceController extends Controller
             ->leftJoin('c_uom as u', 'u.c_uom_id', '=', 'il.c_uom_id')
             ->leftJoin('c_orderline as ol', 'ol.c_orderline_id', '=', 'il.c_orderline_id')
             ->where('io.ad_client_id', $clientId)
-            ->where('io.docstatus', 'CO')
-            ->where('io.movementtype', 'V+')
-            ->where('io.issotrx', 'Y')
+            ->where('io.docstatus', $arInvoiceConfig['shipment_link_filters']['doc_status'])
+            ->where('io.movementtype', $arInvoiceConfig['shipment_link_filters']['movement_type'])
+            ->where('io.issotrx', $arInvoiceConfig['shipment_link_filters']['is_so_trx'])
             ->where(function ($q) use ($search) {
                 $q->where('io.documentno', 'ilike', "%{$search}%")
                     ->orWhere('p.name', 'ilike', "%{$search}%")
@@ -1112,8 +1124,9 @@ class ArInvoiceController extends Controller
     // API: Get Products
     public function getProducts(Request $request)
     {
+        $arInvoiceConfig = config('idempiere.ar-invoice');
         $search = $request->get('q', '');
-        $perPage = 20;
+        $perPage = $arInvoiceConfig['limits']['products_per_page'];
         $page = $request->get('page', 1);
         $clientId = Session::get('idempiere_client');
 
@@ -1122,7 +1135,7 @@ class ArInvoiceController extends Controller
             ->leftJoin('c_uom as u', 'u.c_uom_id', '=', 'p.c_uom_id')
             ->where('p.ad_client_id', $clientId)
             ->where('p.isactive', 'Y')
-            ->where('p.ispurchased', 'Y');
+            ->where('p.ispurchased', $arInvoiceConfig['filters']['product_is_purchased']);
 
         if ($search) {
             $query->where(function ($q) use ($search) {

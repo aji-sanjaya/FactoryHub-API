@@ -23,6 +23,8 @@ class DeliveryScheduleController extends Controller
      */
     public function index()
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+
         // 1. Check Authentication / Session Context
         if (!\Illuminate\Support\Facades\Session::has('api_token')) {
             return redirect()->route('signin');
@@ -98,9 +100,9 @@ class DeliveryScheduleController extends Controller
             $pricelists = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
                 SELECT pl.m_pricelist_id AS id, pl.name AS text
                 FROM m_pricelist pl
-                WHERE pl.isactive = 'Y' AND pl.ad_client_id = ? AND pl.issopricelist = 'Y'
+                WHERE pl.isactive = 'Y' AND pl.ad_client_id = ? AND pl.issopricelist = ?
                 ORDER BY pl.name
-            ", [$clientId]);
+            ", [$clientId, $deliveryScheduleConfig['filters']['is_sales_price_list']]);
 
             // Fetch Users for Checked/Approved By
             $users = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
@@ -115,9 +117,9 @@ class DeliveryScheduleController extends Controller
             $bpartners = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
                 SELECT c_bpartner_id AS id, name AS text
                 FROM c_bpartner
-                WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer = 'Y'
+                WHERE isactive = 'Y' AND ad_client_id = ? AND iscustomer = ?
                 ORDER BY name
-            ", [$clientId]);
+            ", [$clientId, $deliveryScheduleConfig['filters']['is_customer']]);
 
             // Fetch Client Name
             $client = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_client')
@@ -134,14 +136,17 @@ class DeliveryScheduleController extends Controller
             ", [$clientId]);
 
             // Fetch Lines if Editing (Paginated)
-            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 10);
+            $defaultLinePerPage = $deliveryScheduleConfig['limits']['line_default_per_page'];
+            $linePerPageOptions = $deliveryScheduleConfig['limits']['line_per_page_options'];
+
+            $lines = new \Illuminate\Pagination\LengthAwarePaginator([], 0, $defaultLinePerPage);
             if ($deliverySchedule) {
                 // Get Current Page and Per Page
                 $page = request()->get('lines_page', 1);
-                $perPage = request()->get('per_page', 10);
+                $perPage = (int) request()->get('per_page', $defaultLinePerPage);
                 // Validate per_page
-                if (!in_array($perPage, [10, 25, 50, 100])) {
-                    $perPage = 10;
+                if (!in_array($perPage, $linePerPageOptions, true)) {
+                    $perPage = $defaultLinePerPage;
                 }
 
                 // Base Query
@@ -200,19 +205,20 @@ class DeliveryScheduleController extends Controller
                 'bpartners' => $bpartners,
                 'documentIdParam' => $docId,
                 'docNo' => isset($deliverySchedule) ? $deliverySchedule->documentno : '** New **',
-                'status' => isset($deliverySchedule) ? $deliverySchedule->status_label : 'Drafted',
+                'status' => isset($deliverySchedule) ? $deliverySchedule->status_label : $deliveryScheduleConfig['defaults']['document_status_label'],
                 'desc' => isset($deliverySchedule) ? $deliverySchedule->description : '',
                 'currentOrgId' => isset($deliverySchedule) ? $deliverySchedule->ad_org_id : null,
                 'isNew' => is_null($deliverySchedule),
                 'docIdParam' => request('document_id'),
-                'isReadOnly' => isset($deliverySchedule) && in_array($deliverySchedule->docstatus, ['CO', 'CL', 'VO', 'RE']),
+                'isReadOnly' => isset($deliverySchedule) && in_array($deliverySchedule->docstatus, $deliveryScheduleConfig['statuses']['read_only'], true),
                 'taxes' => $taxes,
+                'deliveryScheduleConfig' => $deliveryScheduleConfig,
                 'priceListPrecision' => isset($deliverySchedule) && $deliverySchedule->m_pricelist_id
                     ? (int) (\Illuminate\Support\Facades\DB::connection('idempiere')
                         ->table('m_pricelist')
                         ->where('m_pricelist_id', $deliverySchedule->m_pricelist_id)
-                        ->value('priceprecision') ?? 2)
-                    : 2,
+                        ->value('priceprecision') ?? $deliveryScheduleConfig['defaults']['price_precision'])
+                    : $deliveryScheduleConfig['defaults']['price_precision'],
             ];
 
             // AJAX Partial Rendering
@@ -255,8 +261,8 @@ class DeliveryScheduleController extends Controller
 
         // 2. Base Query
         $query = \App\Models\Idempiere\COrder::query()
-            ->where('issotrx', 'Y')
-            ->where('c_doctypetarget_id', 1000051);
+            ->where('issotrx', $deliveryScheduleConfig['defaults']['is_so_trx'])
+            ->where('c_doctypetarget_id', $deliveryScheduleConfig['doc_types']['target']);
 
         if ($clientId) {
             $query->where('ad_client_id', $clientId);
@@ -274,15 +280,15 @@ class DeliveryScheduleController extends Controller
         $statsQuery->whereBetween('dateordered', [$startOfMonth, $endOfMonth]);
 
         $countCompleted = (clone $statsQuery)
-            ->whereIn('docstatus', ['CO', 'CL'])
+            ->whereIn('docstatus', $deliveryScheduleConfig['statuses']['completed'])
             ->count();
 
         $countDraft = (clone $statsQuery)
-            ->whereIn('docstatus', ['DR', 'IN'])
+            ->whereIn('docstatus', $deliveryScheduleConfig['statuses']['draft'])
             ->count();
 
         $countInProgress = (clone $statsQuery)
-            ->where('docstatus', 'IP')
+            ->where('docstatus', $deliveryScheduleConfig['statuses']['in_progress'])
             ->count();
 
         $countAll = $statsQuery->count();
@@ -311,7 +317,7 @@ class DeliveryScheduleController extends Controller
         // 5. Fetch List Data (Paginated)
         $deliverySchedules = $query->orderBy('dateordered', 'desc')
             ->orderBy('created', 'desc')
-            ->paginate(10)
+            ->paginate($deliveryScheduleConfig['limits']['list_per_page'])
             ->withQueryString();
 
         if (request()->ajax()) {
@@ -362,6 +368,7 @@ class DeliveryScheduleController extends Controller
     }
 
     public function getSalesOrders(Request $request) {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
         $bpartnerId = $request->input('bpartner_id');
         $clientId = \Illuminate\Support\Facades\Session::get('idempiere_client');
 
@@ -371,14 +378,14 @@ class DeliveryScheduleController extends Controller
             ->table('c_order')
             ->select('c_order_id as id', 'documentno as text')
             ->where('ad_client_id', $clientId)
-            ->where('c_doctypetarget_id', 1000029)
-            ->where('docstatus', 'CO');
+            ->where('c_doctypetarget_id', $deliveryScheduleConfig['doc_types']['source_sales_order'])
+            ->where('docstatus', $deliveryScheduleConfig['defaults']['source_doc_status']);
         
         if ($bpartnerId) {
             $query->where('c_bpartner_id', $bpartnerId);
         }
 
-        $orders = $query->orderBy('documentno', 'desc')->limit(100)->get();
+        $orders = $query->orderBy('documentno', 'desc')->limit($deliveryScheduleConfig['limits']['sales_orders_per_page'])->get();
         return response()->json($orders);
     }
 
@@ -400,6 +407,7 @@ class DeliveryScheduleController extends Controller
 
     public function store(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
         // 1. Validate Form Input
         $validated = $request->validate([
             'org_id' => 'required',
@@ -455,10 +463,10 @@ class DeliveryScheduleController extends Controller
             'DateOrdered' => $dateOrdered,
             'AD_User_ID' => (int) $sessionUserId,
             'C_BPartner_ID' => (int) $validated['c_bpartner_id'],
-            'IsSOTrx' => true,
+            'IsSOTrx' => $deliveryScheduleConfig['defaults']['is_so_trx'] === 'Y',
             'IsActive' => true,
             'POReference' => $validated['order_reference'] ?? null,
-            'C_DocTypeTarget_ID' => 1000051,
+            'C_DocTypeTarget_ID' => $deliveryScheduleConfig['doc_types']['target'],
             'C_Tax_ID' => !empty($validated['c_tax_id']) ? (int) $validated['c_tax_id'] : null,
         ];
 
@@ -519,6 +527,7 @@ class DeliveryScheduleController extends Controller
 
     public function updateHeader(Request $request, $id)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
         // 1. Validate Form Input
         $validated = $request->validate([
             'org_id' => 'nullable',
@@ -556,7 +565,7 @@ class DeliveryScheduleController extends Controller
         if (isset($validated['order_reference']))
             $payload['POReference'] = $validated['order_reference'];
             
-        $payload['C_DocTypeTarget_ID'] = 1000051;
+        $payload['C_DocTypeTarget_ID'] = $deliveryScheduleConfig['doc_types']['target'];
         
         if (!empty($validated['c_tax_id']))
             $payload['C_Tax_ID'] = (int) $validated['c_tax_id'];
@@ -585,9 +594,10 @@ class DeliveryScheduleController extends Controller
     }
     public function getProducts(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
         $search = $request->get('q');
         $page = $request->get('page', 1);
-        $perPage = 25;
+        $perPage = $deliveryScheduleConfig['limits']['products_per_page'];
 
         // Get Client ID from session
         $clientId = \Illuminate\Support\Facades\Session::get('idempiere_client');
@@ -615,7 +625,7 @@ class DeliveryScheduleController extends Controller
             ->where('p.ad_client_id', $clientId); // Filter by client
 
         // Only sold products, not purchased (finished goods for sale)
-        $query->where('p.issold', 'Y');
+        $query->where('p.issold', $deliveryScheduleConfig['filters']['is_sold']);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -651,6 +661,8 @@ class DeliveryScheduleController extends Controller
 
     public function getProductPrice(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+
         $productId = $request->get('product_id');
         $priceListId = $request->get('pricelist_id');
 
@@ -683,15 +695,19 @@ class DeliveryScheduleController extends Controller
 
         return response()->json([
             'price' => $price,
-            'price_precision' => (int) ($pricePrecision ?? 2),
+            'price_precision' => (int) ($pricePrecision ?? $deliveryScheduleConfig['defaults']['price_precision']),
         ]);
     }
 
     public function process(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+        $allowedActions = $deliveryScheduleConfig['workflow']['allowed_actions'];
+        $reactivateAction = $deliveryScheduleConfig['workflow']['reactivate_action'];
+
         $validated = $request->validate([
             'document_id' => 'required',
-            'doc_action' => 'required|in:CO,PR,VO,CL,RE',
+            'doc_action' => 'required|in:' . implode(',', $allowedActions),
         ]);
 
         try {
@@ -711,7 +727,7 @@ class DeliveryScheduleController extends Controller
 
             if ($response->successful()) {
                 // Custom Logic for Re-Active Action - Execute AFTER successful doc-action
-                if ($validated['doc_action'] === 'RE') {
+                if ($validated['doc_action'] === $reactivateAction) {
                     // Get all order lines with qtydelivered information
                     $orderLines = \Illuminate\Support\Facades\DB::connection('idempiere')
                         ->table('c_orderline')
@@ -976,6 +992,7 @@ class DeliveryScheduleController extends Controller
 
     public function getSOLines(Request $request)
     {
+        $deliveryScheduleConfig = config('idempiere.delivery-schedule');
         $documentId = $request->query('document_id');
         $soFilter = $request->query('so_document_no', '');
 
@@ -1007,10 +1024,10 @@ class DeliveryScheduleController extends Controller
             ->join('m_product as p', 'p.m_product_id', '=', 'ol.m_product_id')
             ->leftJoin('c_uom as uom', 'uom.c_uom_id', '=', 'p.c_uom_id')
             ->where('o.c_bpartner_id', $bpartnerId)
-            ->where('o.docstatus', 'CO')
-            ->where('o.issotrx', 'Y')
+            ->where('o.docstatus', $deliveryScheduleConfig['defaults']['source_doc_status'])
+            ->where('o.issotrx', $deliveryScheduleConfig['defaults']['is_so_trx'])
             ->where('ol.isactive', 'Y')
-            ->where('o.c_doctypetarget_id', 1000029) // Standard Sales Order
+            ->where('o.c_doctypetarget_id', $deliveryScheduleConfig['doc_types']['source_sales_order'])
             ->select(
                 'ol.c_orderline_id',
                 'ol.c_order_id',
@@ -1035,7 +1052,7 @@ class DeliveryScheduleController extends Controller
         $query->orderBy('o.datepromised', 'asc')
               ->orderBy('o.documentno', 'asc')
               ->orderBy('ol.line', 'asc')
-              ->limit(200);
+              ->limit($deliveryScheduleConfig['limits']['source_lines_limit']);
 
         $soLines = $query->get();
 

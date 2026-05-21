@@ -3,11 +3,14 @@
 @section('content')
 
     @php
+        $apPaymentConfig = config('idempiere.ap-payment');
+        $statusConfig = $apPaymentConfig['statuses'];
+        $workflowConfig = $apPaymentConfig['workflow'];
         $isNew      = is_null($payment);
         $activeTab  = $activeTab ?? 'header';
         $docNo      = $isNew ? '** New **' : $payment->documentno;
         $docIdParam = request('document_id');
-        $isReadOnly = !$isNew && in_array($payment->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $isReadOnly = !$isNew && in_array($payment->docstatus, $statusConfig['read_only']);
     @endphp
 
     <div>
@@ -27,13 +30,7 @@
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
                         @if(!$isNew)
                             @php
-                                $hColor = match($payment->docstatus) {
-                                    'NA','VO','RE' => 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-                                    'CO','CL','AP' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-                                    'IP'           => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-                                    'DR'           => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-                                    default        => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                                };
+                                $hColor = $statusConfig['header_badge_classes'][$payment->docstatus] ?? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
                             @endphp
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $hColor }}">{{ $status }}</span>
                             <span class="text-gray-300">•</span>
@@ -140,49 +137,51 @@
                 </div>
                 <div class="px-6 py-5 space-y-3">
                     @php $cs = $payment->docstatus ?? 'DR'; @endphp
-                    @if(in_array($cs, ['DR', 'IN']))
+                    @if(in_array($cs, $workflowConfig['complete_from']))
                         <button onclick="processDocument('CO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-green-800 dark:text-green-300">Complete</div>
-                                <div class="text-xs text-green-600 dark:text-green-400">Process and complete this payment</div>
+                                <div class="text-sm font-medium text-green-800 dark:text-green-300">{{ $workflowConfig['action_labels']['CO'] }}</div>
+                                <div class="text-xs text-green-600 dark:text-green-400">{{ $workflowConfig['button_descriptions']['CO'] }}</div>
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'DR')
+                    @if(in_array($cs, $workflowConfig['void_from']))
                         <button onclick="processDocument('VO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-red-800 dark:text-red-300">Void</div>
-                                <div class="text-xs text-red-600 dark:text-red-400">Void this payment document</div>
+                                <div class="text-sm font-medium text-red-800 dark:text-red-300">{{ $workflowConfig['action_labels']['VO'] }}</div>
+                                <div class="text-xs text-red-600 dark:text-red-400">{{ $workflowConfig['button_descriptions']['VO'] }}</div>
                             </div>
                         </button>
                     @endif
-                    @if($cs === 'CO')
+                    @if(in_array($cs, $workflowConfig['reverse_from']))
                         <button onclick="processDocument('RC')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:border-orange-800 dark:hover:bg-orange-900/40 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-orange-800 dark:text-orange-300">Reverse</div>
-                                <div class="text-xs text-orange-600 dark:text-orange-400">Reverse this completed payment</div>
+                                <div class="text-sm font-medium text-orange-800 dark:text-orange-300">{{ $workflowConfig['action_labels']['RC'] }}</div>
+                                <div class="text-xs text-orange-600 dark:text-orange-400">{{ $workflowConfig['button_descriptions']['RC'] }}</div>
                             </div>
                         </button>
+                    @endif
+                    @if(in_array($cs, $workflowConfig['close_from']))
                         <button onclick="processDocument('CL')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800/80 transition-colors">
                             <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-gray-800 dark:text-gray-300">Close</div>
-                                <div class="text-xs text-gray-600 dark:text-gray-400">Close this payment document</div>
+                                <div class="text-sm font-medium text-gray-800 dark:text-gray-300">{{ $workflowConfig['action_labels']['CL'] }}</div>
+                                <div class="text-xs text-gray-600 dark:text-gray-400">{{ $workflowConfig['button_descriptions']['CL'] }}</div>
                             </div>
                         </button>
                     @endif
@@ -382,10 +381,11 @@
 
         function processDocument(action) {
             closeDocumentActionModal();
-            const actionNames = { CO: 'Complete', VO: 'Void', RC: 'Reverse', CL: 'Close' };
+            const actionNames = @json($workflowConfig['action_labels']);
+            const confirmationMessages = @json($workflowConfig['confirmation_messages']);
             Swal.fire({
                 title: actionNames[action] + ' Payment?',
-                text: 'Are you sure you want to ' + actionNames[action].toLowerCase() + ' this payment?',
+                text: confirmationMessages[action] || ('Are you sure you want to ' + actionNames[action].toLowerCase() + ' this payment?'),
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: action === 'CO' ? '#16a34a' : action === 'VO' ? '#dc2626' : '#d97706',
@@ -446,6 +446,7 @@
             const SEARCH_URL = '{{ route("ap-payment.api.open-invoices") }}';
             const ALLOCATE_URL = '{{ route("ap-payment.allocate.store") }}';
             const DELETE_URL = '{{ route("ap-payment.allocate.delete") }}';
+            const OPEN_INVOICE_SEARCH_MIN_CHARS = {{ $apPaymentConfig['limits']['open_invoice_search_min_chars'] }};
 
             let invSearchTimer = null;
             let invCurrentPage = 1;
@@ -527,7 +528,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
                         <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Search to find invoices</p>
-                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Enter at least 3 characters in the search box above</p>
+                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Enter at least ${OPEN_INVOICE_SEARCH_MIN_CHARS} characters in the search box above</p>
                     </td></tr>`;
                 }
                 
@@ -562,12 +563,12 @@
                 if (!tbody) return;
                 
                 // Require minimum 3 characters to search
-                if (!invSearchQuery || invSearchQuery.trim().length < 3) {
+                if (!invSearchQuery || invSearchQuery.trim().length < OPEN_INVOICE_SEARCH_MIN_CHARS) {
                     tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-12 text-center">
                         <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Enter at least 3 characters to search</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Enter at least ${OPEN_INVOICE_SEARCH_MIN_CHARS} characters to search</p>
                         <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Type invoice number or keyword to find invoices</p>
                     </td></tr>`;
                     document.getElementById('inv_pagination_info').innerHTML = '';

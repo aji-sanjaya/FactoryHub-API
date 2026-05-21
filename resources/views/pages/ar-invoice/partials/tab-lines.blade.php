@@ -1,7 +1,9 @@
 {{-- Lines List Container --}}
 <div id="lines-list-container" class="space-y-6">
     @php
-        $isReadOnly = !is_null($invoice) && in_array($invoice->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $arInvoiceConfig = config('idempiere.ar-invoice');
+        $readOnlyStatuses = $arInvoiceConfig['statuses']['read_only'] ?? ['CO', 'CL', 'VO', 'RE'];
+        $isReadOnly = !is_null($invoice) && in_array($invoice->docstatus, $readOnlyStatuses);
         $canEdit = !$isReadOnly;
         $encDocId = $docIdParam;
     @endphp

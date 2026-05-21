@@ -20,32 +20,19 @@
         $displayName = $adUser ? ($adUser->description ?? $adUser->name ?? Auth::user()->name) : (Auth::user()->name ?? 'Guest');
         $displayEmail = $adUser ? ($adUser->email ?? Auth::user()->email ?? '') : (Auth::user()->email ?? '');
 
-        // Determine user photo
-        $userPhoto = '/images/user/default.png'; // Default photo
-        if ($adUser) {
-            // Use ad_user_id to get image (endpoint returns AD_Image_ID.data)
-            if (isset($adUser->ad_user_id) && !empty($adUser->ad_user_id)) {
-                $userPhoto = route('idempiere.image.show', $adUser->ad_user_id);
-            }
-            // Or check if ad_user has logo field (URL)
-            elseif (isset($adUser->logo) && !empty($adUser->logo)) {
-                $userPhoto = $adUser->logo;
-            }
-        }
+        // Truncate display name to first 2 words only
+        $nameParts = explode(' ', trim($displayName));
+        $displayName = implode(' ', array_slice($nameParts, 0, 2));
     @endphp
 
     <!-- User Button -->
-    <button class="flex items-center text-gray-700 dark:text-gray-400" @click.prevent="toggleDropdown()" type="button">
-        <span class="mr-3 overflow-hidden rounded-full h-11 w-11">
-            <img src="{{ $userPhoto }}" alt="User" class="w-full h-full object-cover" />
-        </span>
-
-        <span class="block mr-1 font-medium text-theme-sm">{{ $displayName }}</span>
-
-        <!-- Chevron Icon -->
-        <svg class="w-5 h-5 transition-transform duration-200" :class="{ 'rotate-180': dropdownOpen }" fill="none"
-            stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    <button
+        class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+        @click.prevent="toggleDropdown()"
+        aria-label="User menu"
+        type="button">
+        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10 2.5a3.75 3.75 0 100 7.5 3.75 3.75 0 000-7.5ZM7.75 6.25a2.25 2.25 0 114.5 0 2.25 2.25 0 01-4.5 0ZM4 15.125A3.625 3.625 0 017.625 11.5h4.75A3.625 3.625 0 0116 15.125c0 .76-.615 1.375-1.375 1.375h-9.25A1.375 1.375 0 014 15.125Zm3.625-2.125A2.125 2.125 0 005.5 15.125h9a2.125 2.125 0 00-2.125-2.125h-4.75Z" clip-rule="evenodd" />
         </svg>
     </button>
 
@@ -86,21 +73,39 @@
             @endforeach
         </ul>
 
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <a href="#"
-                class="flex items-center w-full gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
-                onclick="event.preventDefault(); this.closest('form').submit();">
-                <span class="text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
-                        </path>
-                    </svg>
-                </span>
-                Sign out
-            </a>
-        </form>
+        <div class="mt-3 space-y-1">
+            <form method="POST" action="{{ route('auth.change-role') }}">
+                @csrf
+                <a href="#"
+                    class="flex items-center w-full gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+                    onclick="event.preventDefault(); this.closest('form').submit();">
+                    <span class="text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 20h5V4H2v16h5m10 0v-2a4 4 0 00-4-4H11a4 4 0 00-4 4v2m10 0H7m10-10a4 4 0 11-8 0 4 4 0 018 0z">
+                            </path>
+                        </svg>
+                    </span>
+                    Change Role
+                </a>
+            </form>
+
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <a href="#"
+                    class="flex items-center w-full gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+                    onclick="event.preventDefault(); this.closest('form').submit();">
+                    <span class="text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                            </path>
+                        </svg>
+                    </span>
+                    Sign out
+                </a>
+            </form>
+        </div>
     </div>
     <!-- Dropdown End -->
 </div>

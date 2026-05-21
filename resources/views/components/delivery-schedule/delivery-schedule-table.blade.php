@@ -1,5 +1,11 @@
 @props(['delivery-schedules'])
 
+@php
+    $deliveryScheduleConfig = config('idempiere.delivery-schedule');
+    $statusBadgeClasses = $deliveryScheduleConfig['statuses']['badge_classes'] ?? [];
+    $defaultStatusBadgeClass = 'bg-gray-50 text-gray-600 dark:bg-white/5 dark:text-gray-400';
+@endphp
+
 <div class="overflow-hidden rounded-b-2xl border border-t-0 border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
     <div class="max-w-full overflow-x-auto">
         <table class="w-full table-auto">
@@ -66,11 +72,7 @@
                         <td class="px-4 py-3 text-right">
                             @php
                                 $statusLabel = $req->status_label;
-                                $statusClass = match($statusLabel) {
-                                    'Completed', 'Closed' => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
-                                    'In Progress', 'Approved' => 'bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400',
-                                    default => 'bg-gray-50 text-gray-600 dark:bg-white/5 dark:text-gray-400'
-                                };
+                                $statusClass = $statusBadgeClasses[$statusLabel] ?? $defaultStatusBadgeClass;
                             @endphp
                             <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {{ $statusClass }}">
                                 {{ $statusLabel }}

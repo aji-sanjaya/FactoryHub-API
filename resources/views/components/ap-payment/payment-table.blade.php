@@ -18,30 +18,21 @@
             <tbody>
                 @forelse ($payments as $index => $payment)
                     @php
+                        $apPaymentConfig = config('idempiere.ap-payment');
+                        $paymentRuleOptions = collect($apPaymentConfig['payment_rules']);
+                        $statusLabels = $apPaymentConfig['statuses']['labels'];
+                        $statusBadgeClasses = $apPaymentConfig['statuses']['badge_classes'];
+                        $paymentRuleCode = $payment->tendertype ?? $payment->paymentrule ?? '';
+                        $paymentRuleOption = $paymentRuleOptions->firstWhere('id', $paymentRuleCode);
                         $vendorName = \Illuminate\Support\Facades\DB::connection('idempiere')
                             ->table('c_bpartner')
                             ->where('c_bpartner_id', $payment->c_bpartner_id)
                             ->value('name');
 
-                        $paymentRuleLabel = match($payment->paymentrule ?? '') {
-                            'T' => 'Transfer', 'K' => 'Cash', 'S' => 'Check',
-                            'P' => 'On Credit', 'D' => 'Direct Debit', 'C' => 'Credit Card',
-                            default => $payment->paymentrule ?? '-',
-                        };
+                        $paymentRuleLabel = $paymentRuleOption['text'] ?? ($paymentRuleCode ?: '-');
 
-                        $statusLabel = match($payment->docstatus) {
-                            'DR' => 'Draft', 'IP' => 'In Progress', 'CO' => 'Completed',
-                            'CL' => 'Closed', 'VO' => 'Voided', 'RE' => 'Reversed',
-                            'NA' => 'Not Approved', 'AP' => 'Approved', default => $payment->docstatus,
-                        };
-
-                        $statusClass = match($statusLabel) {
-                            'Completed', 'Closed'         => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
-                            'In Progress', 'Approved'     => 'bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400',
-                            'Voided', 'Reversed',
-                            'Not Approved'                => 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400',
-                            default                       => 'bg-gray-50 text-gray-600 dark:bg-white/5 dark:text-gray-400',
-                        };
+                        $statusLabel = $statusLabels[$payment->docstatus] ?? $payment->docstatus;
+                        $statusClass = $statusBadgeClasses[$statusLabel] ?? 'bg-gray-50 text-gray-600 dark:bg-white/5 dark:text-gray-400';
                     @endphp
                     <tr class="border-t border-gray-200 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
                         <td class="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">

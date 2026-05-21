@@ -10,7 +10,7 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::create('dpk_web_portal_menus', function (Blueprint $table) {
+        Schema::create('adw_web_portal_menus', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->string('name');
@@ -21,7 +21,7 @@ return new class extends Migration {
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->foreign('parent_id')->references('id')->on('dpk_web_portal_menus')->onDelete('cascade');
+            $table->foreign('parent_id')->references('id')->on('adw_web_portal_menus')->onDelete('cascade');
         });
     }
 
@@ -30,6 +30,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists('dpk_web_portal_menus');
+        Schema::dropIfExists('adw_web_portal_menus');
     }
 };

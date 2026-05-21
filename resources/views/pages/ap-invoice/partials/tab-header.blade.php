@@ -9,8 +9,9 @@
 </style>
 <div class="px-8 py-6 max-w-7xl mx-auto">
     @php
+        $apInvoiceConfig = $apInvoiceConfig ?? config('idempiere.ap-invoice');
         $isNew = is_null($invoice);
-        $isReadOnly = !$isNew && in_array($invoice->docstatus, ['CO', 'CL', 'VO', 'RE']);
+        $isReadOnly = !$isNew && in_array($invoice->docstatus, $apInvoiceConfig['statuses']['read_only'] ?? [], true);
         $docNo = $isNew ? '** New **' : $invoice->documentno;
         $clientName = session('idempiere_client_name', 'Dharmamulia Prima Karya');
     @endphp
@@ -270,7 +271,7 @@
             {{-- Right Column --}}
             <div class="space-y-5">
                 {{-- Status --}}
-                @if(!$isNew)
+                {{-- @if(!$isNew)
                     <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label
                             class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Status</label>
@@ -290,26 +291,49 @@
                             </span>
                         </div>
                     </div>
-                @endif
+                @endif --}}
 
-                {{-- Total Lines --}}
+                {{-- Total Amount --}}
                 @if(!$isNew)
                     <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Total
-                            Lines</label>
+                        <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Total Amount</label>
                         <div class="col-span-1 sm:col-span-2">
-                            <input type="text" value="{{ number_format($totalLines ?? 0, 2, '.', ',') }}" readonly
-                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-mono cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300">
+                            <input type="text" id="txt_total_lines"
+                                value="{{ number_format($totalLines ?? 0, 2) }}" readonly
+                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 text-right font-medium">
                         </div>
                     </div>
 
-                    {{-- Grand Total --}}
+                    {{-- Total Tax Amount --}}
                     <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                        <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Grand
-                            Total</label>
+                        <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Total Tax Amount</label>
                         <div class="col-span-1 sm:col-span-2">
-                            <input type="text" value="{{ number_format($grandTotal ?? 0, 2, '.', ',') }}" readonly
-                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-800 font-semibold font-mono cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-200">
+                            <input type="text" id="txt_tax_amount"
+                                value="{{ number_format(($grandTotal ?? 0) - ($totalLines ?? 0), 2) }}" readonly
+                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 text-right font-medium">
+                        </div>
+                    </div>
+
+                    {{-- Total Other Tax (PPh23) --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Total Other Tax
+                            <span class="block text-xs text-orange-500 font-normal">(PPh23)</span>
+                        </label>
+                        <div class="col-span-1 sm:col-span-2">
+                            <input type="text" id="txt_withholding_total"
+                                value="{{ number_format($withholdingTotal ?? 0, 2) }}" readonly
+                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-orange-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-orange-400 text-right font-medium">
+                        </div>
+                    </div>
+
+                    {{-- Grand Total Amount --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                        <label class="text-left sm:text-right text-sm font-bold text-gray-900 dark:text-gray-100">Grand Total Amount</label>
+                        <div class="col-span-1 sm:col-span-2">
+                            <input type="text" id="txt_grand_total"
+                                value="{{ number_format(($grandTotal ?? 0) - ($withholdingTotal ?? 0), 2) }}" readonly
+                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-900 font-bold cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-white text-right">
                         </div>
                     </div>
                 @endif

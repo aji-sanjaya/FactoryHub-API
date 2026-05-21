@@ -7,12 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 class DpkPettycashRequestLine extends Model
 {
     protected $connection = 'idempiere';
-    protected $table = 'dpk_pettycash_requestline';
-    protected $primaryKey = 'dpk_pettycash_requestline_id';
+    protected $table = 'adw_pettycash_requestline';
+    protected $primaryKey = 'adw_pettycash_requestline_id';
     public $timestamps = false;
 
     protected $fillable = [
-        'dpk_pettycash_request_id',
+        'adw_pettycash_request_id',
         'ad_client_id',
         'ad_org_id',
         'description',
@@ -39,6 +39,6 @@ class DpkPettycashRequestLine extends Model
      */
     public function request()
     {
-        return $this->belongsTo(DpkPettycashRequest::class, 'dpk_pettycash_request_id', 'dpk_pettycash_request_id');
+        return $this->belongsTo(DpkPettycashRequest::class, 'adw_pettycash_request_id', 'adw_pettycash_request_id');
     }
 }

@@ -155,86 +155,83 @@
 <body>
 
     {{-- ── Header ── --}}
-    <table class="header-table">
+    <table style="width: 100%; border-collapse: collapse;">
+        {{-- Row 1: Company name + address | Logo + Title --}}
         <tr>
-            <td width="15%" align="center">
-                @if(!empty($logoBase64))
-                    <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 60px; width: auto;">
-                @else
-                    <div class="logo-box">D</div>
+            <td style="border-bottom: 1px solid black; padding: 8px; width: 60%; vertical-align: top;">
+                <strong style="font-size: 13pt;">{{ $clientName ?? '' }}</strong><br>
+                @if(!empty($orgInfo))
+                    @if(!empty($orgInfo->address1))<span style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
+                    @if(!empty($orgInfo->address2))<span style="font-size: 9pt;">{{ $orgInfo->address2 }}</span><br>@endif
+                    @if(!empty($orgInfo->address3))<span style="font-size: 9pt;">{{ $orgInfo->address3 }}</span><br>@endif
+                    @php
+                        $cityPostal = trim(($orgInfo->city ?? '') . ($orgInfo->postal ? ',  ' . $orgInfo->postal : ''));
+                    @endphp
+                    @if($cityPostal)<span style="font-size: 9pt;">{{ $cityPostal }}</span>@endif
                 @endif
             </td>
-            <td width="85%" align="center">
-                <div class="company-name">PT DHARMAMULIA PRIMA KARYA</div>
-                <div class="company-address">
-                    Jalan Jogja-Solo KM 12,5, Padukuhan Karang Kalasan, RT 001/RW 006 Kelurahan Tirtomartani,<br>
-                    Kecamatan Kalasan, Kabupaten Sleman, Daerah Istimewa Yogyakarta Telp. 0274 – 2850888, Fax. 0274 – 497468
-                </div>
+            <td style="border-bottom: 1px solid black; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
+                @if(!empty($logoBase64))
+                    <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;"><br>
+                @endif
+                <strong style="font-size: 13pt;">Material Receipt</strong>
+            </td>
+        </tr>
+        {{-- Row 2: Supplier info | Doc info --}}
+        <tr>
+            <td colspan="2" style="border: 1px solid black; border-top: none; padding: 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="border-right: 1px solid black; padding: 8px; width: 50%; vertical-align: top; font-size: 10pt;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 2px 4px; white-space: nowrap;">Supplier Name</td>
+                                    <td style="padding: 2px 4px; width: 8px; text-align: center;">:</td>
+                                    <td style="padding: 2px 4px;">{{ $vendorName }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px 4px; white-space: nowrap;">Vendor Code</td>
+                                    <td style="padding: 2px 4px; text-align: center;">:</td>
+                                    <td style="padding: 2px 4px;">{{ $vendorCode }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px 4px; white-space: nowrap;">Supplier DN No.</td>
+                                    <td style="padding: 2px 4px; text-align: center;">:</td>
+                                    <td style="padding: 2px 4px;">{{ $supplierDNNo }}</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td style="padding: 8px; width: 50%; vertical-align: top; font-size: 10pt;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 2px 4px; white-space: nowrap;">No.</td>
+                                    <td style="padding: 2px 4px; width: 8px;">:</td>
+                                    <td style="padding: 2px 4px;"><strong>{{ $receipt->documentno }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px 4px; white-space: nowrap;">Date</td>
+                                    <td style="padding: 2px 4px;">:</td>
+                                    <td style="padding: 2px 4px;"><strong>{{ $receipt->movementdate ? \Carbon\Carbon::parse($receipt->movementdate)->format('d/m/Y') : '-' }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 2px 4px; white-space: nowrap;">Status</td>
+                                    <td style="padding: 2px 4px;">:</td>
+                                    <td style="padding: 2px 4px;">
+                                        @php
+                                            $statusMap = ['DR'=>'Draft','IP'=>'In Progress','CO'=>'Completed','VO'=>'Voided','RE'=>'Reversed','CL'=>'Closed'];
+                                            echo $statusMap[$receipt->docstatus] ?? $receipt->docstatus;
+                                        @endphp
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>
-    <div style="text-align: right; font-size: 8pt; margin-top: 2px;">Page 1 / 1</div>
 
-    {{-- ── Title ── --}}
-    <div class="doc-title">Good Receipt</div>
-
-    <!-- Info Box -->
-    <div class="info-container">
-        <table class="info-table">
-            <tr>
-                <!-- Left Column -->
-                <td width="50%">
-                    <table>
-                        <tr>
-                            <td class="info-label">No. Dokumen</td>
-                            <td class="colon">:</td>
-                            <td>FM/PCR/01-0023</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Revisi</td>
-                            <td class="colon">:</td>
-                            <td>1</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Tanggal Terbit</td>
-                            <td class="colon">:</td>
-                            <td>{{ $receipt->dateacct ? \Carbon\Carbon::parse($receipt->dateacct)->format('d M Y') : \Carbon\Carbon::parse($receipt->created)->format('d M Y') }}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Halaman</td>
-                            <td class="colon">:</td>
-                            <td>1</td>
-                        </tr>
-                    </table>
-                </td>
-                <!-- Right Column -->
-                <td width="50%" style="border-left: 1px solid #000; padding-left: 10px;">
-                    <table>
-                        <tr>
-                            <td class="info-label">Tanggal GR</td>
-                            <td class="colon">:</td>
-                            <td>{{ $receipt->movementdate ? \Carbon\Carbon::parse($receipt->movementdate)->format('d M Y') : '-' }}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">No. GR</td>
-                            <td class="colon">:</td>
-                            <td>{{ $receipt->documentno }}</td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Supplier</td>
-                            <td class="colon">:</td>
-                            <td><strong>{{ $vendorName }}</strong></td>
-                        </tr>
-                        <tr>
-                            <td class="info-label">Site</td>
-                            <td class="colon">:</td>
-                            <td>{{ $warehouseAddress ?? $warehouseName }}</td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </div>
+    <br>
 
     <!-- Items Table -->
     <table class="items-table" cellspacing="0">
