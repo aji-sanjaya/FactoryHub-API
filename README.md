@@ -23,6 +23,10 @@ Based on the menu structure and active application routes in this repository, th
 * **Reporting features** including Procurement Report, Purchase Order Report, Aging AP Invoice Report, and Aging AR Invoice Report
 * **Supporting capabilities** such as authentication, role-based access flow, document printing, attachment handling, journal export, and selected repost processes
 
+## Update Log
+
+* **2026-05-21 19:11:26 WIB** - Update Module Requisition dan Purchase Order
+
 ## Technology Stack
 
 FactoryHub - API is currently built on:
