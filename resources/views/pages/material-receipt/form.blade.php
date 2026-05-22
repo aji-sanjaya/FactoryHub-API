@@ -36,9 +36,20 @@
         $voidFromStatuses = $workflowConfig['void_from'] ?? [];
         $reverseFromStatuses = $workflowConfig['reverse_from'] ?? [];
         $closeFromStatuses = $workflowConfig['close_from'] ?? [];
+        $reactivateAction = $workflowConfig['reactivate_action'] ?? 'RE';
+        $reactivateFromStatuses = $workflowConfig['reactivate_from'] ?? [];
+        $completeFromStatuses = array_map(static fn ($status) => strtoupper(trim((string) $status)), $completeFromStatuses);
+        $reactivateFromStatuses = array_map(static fn ($status) => strtoupper(trim((string) $status)), $reactivateFromStatuses);
         $workflowActionLabels = $workflowConfig['action_labels'] ?? [];
         $workflowConfirmationMessages = $workflowConfig['confirmation_messages'] ?? [];
         $workflowActionDescriptions = $workflowConfig['button_descriptions'] ?? [];
+        $currentDocStatus = strtoupper(trim((string) ($receipt->docstatus ?? 'DR')));
+        $showCompleteAction = !$isNew && in_array($currentDocStatus, $completeFromStatuses, true);
+        $showReactivateAction = !$isNew && $currentDocStatus === 'CO';
+        $hasDocumentActions = !$isNew && (
+            $showCompleteAction
+            || $showReactivateAction
+        );
     @endphp
 
     <div>
@@ -74,7 +85,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                         </svg>
                         Print
-                    </button>
+                    </button> 
                 @endif
 
                 <!-- Header Save Button -->
@@ -168,8 +179,7 @@
                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Select an action to perform on this document</p>
                 </div>
                 <div class="px-6 py-5 space-y-3">
-                    @php $cs = $receipt->docstatus ?? 'DR'; @endphp
-                    @if(in_array($cs, $completeFromStatuses, true))
+                    @if($showCompleteAction)
                         <button onclick="processDocument('CO')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/40 transition-colors group">
                             <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
@@ -181,39 +191,15 @@
                             </div>
                         </button>
                     @endif
-                    @if(in_array($cs, $voidFromStatuses, true))
-                        <button onclick="processDocument('VO')"
-                            class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/40 transition-colors group">
-                            <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-sm font-medium text-red-800 dark:text-red-300">{{ $workflowActionLabels['VO'] ?? 'Void' }}</div>
-                                <div class="text-xs text-red-600 dark:text-red-400">{{ $workflowActionDescriptions['VO'] ?? 'Void this receipt document' }}</div>
-                            </div>
-                        </button>
-                    @endif
-                    @if(in_array($cs, $reverseFromStatuses, true))
-                        <button onclick="processDocument('RC')"
+                    @if($showReactivateAction)
+                        <button onclick="processDocument('{{ $reactivateAction }}')"
                             class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:border-orange-800 dark:hover:bg-orange-900/40 transition-colors group">
                             <div class="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             </div>
                             <div>
-                                <div class="text-sm font-medium text-orange-800 dark:text-orange-300">{{ $workflowActionLabels['RC'] ?? 'Reverse' }}</div>
-                                <div class="text-xs text-orange-600 dark:text-orange-400">{{ $workflowActionDescriptions['RC'] ?? 'Reverse this completed receipt' }}</div>
-                            </div>
-                        </button>
-                    @endif
-                    @if(in_array($cs, $closeFromStatuses, true))
-                        <button onclick="processDocument('CL')"
-                            class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800/80 transition-colors group">
-                            <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                            </div>
-                            <div>
-                                <div class="text-sm font-medium text-gray-800 dark:text-gray-300">{{ $workflowActionLabels['CL'] ?? 'Close' }}</div>
-                                <div class="text-xs text-gray-600 dark:text-gray-400">{{ $workflowActionDescriptions['CL'] ?? 'Close this receipt document' }}</div>
+                                <div class="text-sm font-medium text-orange-800 dark:text-orange-300">{{ $workflowActionLabels[$reactivateAction] ?? 'Re-Active' }}</div>
+                                <div class="text-xs text-orange-600 dark:text-orange-400">{{ $workflowActionDescriptions[$reactivateAction] ?? 'Create a new draft by copying this receipt, then reverse the old document' }}</div>
                             </div>
                         </button>
                     @endif
@@ -454,14 +440,32 @@
                 cancelButtonText: 'Cancel'
             }).then(result => {
                 if (result.isConfirmed) {
+                    if (action === 'RE') {
+                        Swal.fire({
+                            title: 'Processing Re-Active...',
+                            html: 'Copying document and reversing the original.<br>Please wait.',
+                            allowOutsideClick: false,
+                            allowEscapeKey: false,
+                            showConfirmButton: false,
+                            didOpen: () => { Swal.showLoading(); }
+                        });
+                    }
+
                     axios.post('{{ route("material-receipt.process") }}', {
                         document_id: '{{ $docIdParam }}',
                         doc_action:  action,
                         _token:      '{{ csrf_token() }}'
                     })
                     .then(res => {
+                        const newDocumentId = res.data?.new_document_id;
                         Swal.fire({ icon: 'success', title: 'Done!', text: res.data.message, timer: 1500, showConfirmButton: false })
-                            .then(() => window.location.reload());
+                            .then(() => {
+                                if (newDocumentId) {
+                                    window.location.href = '{{ route("material-receipt.index") }}?document_id=' + encodeURIComponent(newDocumentId);
+                                    return;
+                                }
+                                window.location.reload();
+                            });
                     })
                     .catch(err => {
                         Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.message || 'Action failed.' });

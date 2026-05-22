@@ -5,8 +5,26 @@
     <title>Good Receipt {{ $receipt->documentno }}</title>
     <style>
         @page {
-            margin: 1cm;
+            margin-top:    150px;
+            margin-bottom: 1cm;
+            margin-left:   20px;
+            margin-right:  20px;
         }
+
+        /* ── Fixed repeating header ── */
+        #page-header {
+            position: fixed;
+            top:    -145px;
+            left:   0px;
+            right:  0px;
+            background: white;
+        }
+
+        /* ── Signature footer (normal flow) ── */
+        #page-footer {
+            margin-top: 1em;
+        }
+
         body {
             font-family: Arial, sans-serif;
             font-size: 9pt;
@@ -154,6 +172,7 @@
 </head>
 <body>
 
+    <div id="page-header">
     {{-- ── Header ── --}}
     <table style="width: 100%; border-collapse: collapse;">
         {{-- Row 1: Company name + address | Logo + Title --}}
@@ -230,8 +249,7 @@
             </td>
         </tr>
     </table>
-
-    <br>
+    </div>
 
     <!-- Items Table -->
     <table class="items-table" cellspacing="0">
@@ -262,25 +280,55 @@
         </tbody>
     </table>
 
-    <!-- Notes -->
-    <div class="notes-section">
-        <strong>Note :</strong>
-        <div class="notes-content">{{ $receipt->description ?? '' }}</div>
-    </div>
-
-    <!-- Signatures -->
-    <table class="signature-section">
-        <tr>
-            <td style="text-align: left; vertical-align: top; width: 25%; padding: 10px;">
-                <div class="sig-title">Receipt By</div>
-                <div style="height: 65px;"></div>
-                <div class="sig-name">{{ $receivedByName ?? '..................' }}</div>
-                <div class="sig-role" style="font-style: italic; font-size: 7pt;">
-                    {{ \Carbon\Carbon::parse($receipt->updated ?? $receipt->created)->format('d M Y H:i') }}
-                </div>
-            </td>
-        </tr>
-    </table>
+    <div id="page-footer">
+        {{-- LEGALIZATION Signature Table --}}
+        <table style="width:100%; border-collapse:collapse;">
+            <tbody>
+                {{-- Row 1: blank left (tall, spans 3 rows) + LEGALIZATION header --}}
+                <tr>
+                    <td rowspan="3" style="width:76%; border:1px solid #000; vertical-align:top;">
+                         <!-- Notes -->
+                        <div class="notes-section" style="margin-left: 10px;">
+                            <strong>Note :</strong>
+                            <div class="notes-content">{{ $receipt->description ?? '' }}</div>
+                        </div>
+                    </td>
+                    <td colspan="3" style="border:1px solid #000; text-align:center; font-weight:bold; padding:4px 6px; font-size:9pt;">LEGALIZATION</td>
+                </tr>
+                {{-- Row 2: QR Code --}}
+                <tr style="height:65px;">
+                    <td style="border:1px solid #000; width:18%; vertical-align:middle; text-align:center; padding:3px;">
+                        @if(!empty($purchasingQr))
+                            <img src="{{ $purchasingQr }}" alt="QR" style="height:58px; width:58px;">
+                        @endif
+                    </td>
+                    <td style="border:1px solid #000; width:18%; vertical-align:middle; text-align:center; padding:3px;">
+                        @if(!empty($qcIncomingQr))
+                            <img src="{{ $qcIncomingQr }}" alt="QR" style="height:58px; width:58px;">
+                        @endif
+                    </td>
+                    <td style="border:1px solid #000; width:18%; vertical-align:middle; text-align:center; padding:3px;">
+                        @if(!empty($userQr))
+                            <img src="{{ $userQr }}" alt="QR" style="height:58px; width:58px; margin-top:15px; margin-bottom:15px;">
+                        @endif
+                    </td>
+                </tr>
+                {{-- Row 3: name labels --}}
+                <tr>
+                    <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">Purchasing</td>
+                    <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">QC Incoming</td>
+                    <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">{{ $updatedByName ?: 'User' }}</td>
+                </tr>
+            </tbody>
+        </table>
+        {{-- Doc number + printed date --}}
+        <table style="width:100%; border-collapse:collapse; margin-top:3px;">
+            <tr>
+                <td style="text-align:left; font-size:8pt;">{{ $receipt->documentno }}</td>
+                <td style="text-align:right; font-size:8pt;">Printed : {{ now()->format('d-M-Y H:i:s') }}</td>
+            </tr>
+        </table>
+    </div> 
 
 </body>
 </html>

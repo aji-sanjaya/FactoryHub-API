@@ -396,17 +396,20 @@ return [
         ],
         'workflow' => [
             'table_name' => env('IDEMPIERE_GR_WORKFLOW_TABLE_NAME', 'M_InOut'),
-            'allowed_actions' => array_map('trim', explode(',', env('IDEMPIERE_GR_ALLOWED_ACTIONS', 'CO,PR,VO,CL,RC'))),
+            'allowed_actions' => array_map('trim', explode(',', env('IDEMPIERE_GR_ALLOWED_ACTIONS', 'CO,PR,VO,CL,RC,RE'))),
             'complete_from' => array_map('trim', explode(',', env('IDEMPIERE_GR_COMPLETE_FROM', 'DR,IN'))),
             'void_from' => array_map('trim', explode(',', env('IDEMPIERE_GR_VOID_FROM', 'DR'))),
             'reverse_from' => array_map('trim', explode(',', env('IDEMPIERE_GR_REVERSE_FROM', 'CO'))),
             'close_from' => array_map('trim', explode(',', env('IDEMPIERE_GR_CLOSE_FROM', 'CO'))),
+            'reactivate_action' => env('IDEMPIERE_GR_REACTIVATE_ACTION', 'RE'),
+            'reactivate_from' => array_map('trim', explode(',', env('IDEMPIERE_GR_REACTIVATE_FROM', 'CO'))),
             'action_labels' => [
                 'CO' => 'Complete',
                 'PR' => 'Prepare',
                 'VO' => 'Void',
                 'CL' => 'Close',
                 'RC' => 'Reverse',
+                'RE' => 'Re-Active',
             ],
             'confirmation_messages' => [
                 'CO' => 'Are you sure you want to complete this receipt?',
@@ -414,12 +417,14 @@ return [
                 'VO' => 'Are you sure you want to void this receipt? This action cannot be undone!',
                 'CL' => 'Are you sure you want to close this receipt?',
                 'RC' => 'Are you sure you want to reverse this completed receipt?',
+                'RE' => 'Are you sure you want to re-active this receipt? The system will copy the document, reverse the old one, and open the new draft document.',
             ],
             'button_descriptions' => [
                 'CO' => 'Process and complete this receipt',
                 'VO' => 'Void this receipt document',
                 'RC' => 'Reverse this completed receipt',
                 'CL' => 'Close this receipt document',
+                'RE' => 'Create a new draft by copying this receipt, then reverse the old document',
             ],
         ],
         'journals' => [

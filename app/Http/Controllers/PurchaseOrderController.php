@@ -853,6 +853,23 @@ class PurchaseOrderController extends Controller
             if (!empty($validated['line_id'])) {
                 // Update
                 $lineId = $validated['line_id'];
+
+                $receivedQty = (float) \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('m_inoutline as iol')
+                    ->join('m_inout as io', 'io.m_inout_id', '=', 'iol.m_inout_id')
+                    ->where('iol.c_orderline_id', (int) $lineId)
+                    ->whereNotIn('io.docstatus', ['VO', 'RE'])
+                    ->sum('iol.movementqty');
+
+                if ($qty < $receivedQty) {
+                    return response()->json([
+                        'message' => 'Qty PO line tidak boleh lebih kecil dari total Qty Receipt. '
+                            . 'Qty Receipt saat ini: '
+                            . rtrim(rtrim(number_format($receivedQty, 2, '.', ''), '0'), '.')
+                            . '.'
+                    ], 422);
+                }
+
                 $response = $this->idempiereService->put("models/c_orderline/{$lineId}", $payload);
                 $action = 'updated';
             } else {
@@ -912,6 +929,19 @@ class PurchaseOrderController extends Controller
             foreach ($validated['line_ids'] as $lineId) {
                 $lineId = (int) $lineId; // Ensure integer
 
+                $linkedReceiptExists = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('m_inoutline as iol')
+                    ->join('m_inout as io', 'io.m_inout_id', '=', 'iol.m_inout_id')
+                    ->where('iol.c_orderline_id', $lineId)
+                    ->whereNotIn('io.docstatus', ['VO', 'RE'])
+                    ->exists();
+
+                if ($linkedReceiptExists) {
+                    return response()->json([
+                        'message' => 'Cannot delete PO line because it is already linked to Material Receipt lines.'
+                    ], 422);
+                }
+
                 // Fetch order_id from first line for totals later
                 if (!$orderId) {
                     $line = \Illuminate\Support\Facades\DB::connection('idempiere')
@@ -962,12 +992,10 @@ class PurchaseOrderController extends Controller
         ]);
 
         try {
-            $orderId = Crypt::decryptString($validated['document_id']);
-
+            $orderId = Crypt::decryptString($validated['document_id']); 
             $payload = [
                 'doc-action' => $validated['doc_action']
-            ];
-
+            ]; 
             \Illuminate\Support\Facades\Log::info('Processing Purchase Order', [
                 'order_id' => $orderId,
                 'action' => $validated['doc_action']
@@ -976,7 +1004,7 @@ class PurchaseOrderController extends Controller
             // Use IdempiereService
             $response = $this->idempiereService->put("models/c_order/{$orderId}", $payload);
 
-            if ($response->successful()) {
+            if ($response->successful()) {  
                 if ($validated['doc_action'] === 'CO') {
                     // Manual DB update as requested to ensure custom columns are cleared
                     \Illuminate\Support\Facades\DB::connection('idempiere')

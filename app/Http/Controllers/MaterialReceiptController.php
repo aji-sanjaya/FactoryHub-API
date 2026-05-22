@@ -379,6 +379,52 @@ class MaterialReceiptController extends Controller
             }
         }
 
+        // Updated by (last action / completed by user name)
+        $updatedByName = '';
+        if (isset($receipt->updatedby)) {
+            $updatedByUser = DB::connection('idempiere')
+                ->table('ad_user')
+                ->where('ad_user_id', $receipt->updatedby)
+                ->select('name')
+                ->first();
+            if ($updatedByUser) {
+                $updatedByName = $updatedByUser->name;
+            }
+        }
+
+        // QR Codes for LEGALIZATION footer (api.qrserver.com)
+        $qrBase = 'https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=';
+
+        // QC Incoming QR — adw_ad_user_checked_id (checked/step-1)
+        $qcIncomingQr = null;
+        if (!empty($receipt->adw_ad_user_checked_id)) {
+            $checkedByName = DB::connection('idempiere')
+                ->table('ad_user')
+                ->where('ad_user_id', $receipt->adw_ad_user_checked_id)
+                ->value('name');
+            if ($receipt->adw_checked_isapproved === 'AP' && !empty($receipt->adw_checked_date)) {
+                $qcIncomingQr = $qrBase . urlencode('Checked by ' . $checkedByName . ' on ' . $receipt->adw_checked_date);
+            }
+        }
+
+        // Purchasing QR — adw_ad_user_approved_id (approved/step-2)
+        $purchasingQr = null;
+        if (!empty($receipt->adw_ad_user_approved_id)) {
+            $approvedByName = DB::connection('idempiere')
+                ->table('ad_user')
+                ->where('ad_user_id', $receipt->adw_ad_user_approved_id)
+                ->value('name');
+            if ($receipt->adw_approve_isapproved === 'AP' && !empty($receipt->adw_approved_date)) {
+                $purchasingQr = $qrBase . urlencode('Approved by ' . $approvedByName . ' on ' . $receipt->adw_approved_date);
+            }
+        }
+
+        // User QR — show when document is Complete (CO)
+        $userQr = null;
+        if (strtoupper(trim((string) $receipt->docstatus)) === 'CO' && $updatedByName && !empty($receipt->updated)) {
+            $userQr = $qrBase . urlencode('Completed by ' . $updatedByName . ' on ' . $receipt->updated);
+        }
+
         // Doc type code / name
         $docTypeCode = null;
         if (isset($receipt->c_doctype_id)) {
@@ -458,9 +504,13 @@ class MaterialReceiptController extends Controller
             'warehouseName' => $warehouseName,
             'warehouseAddress' => $warehouseAddress,
             'receivedByName' => $receivedByName,
+            'updatedByName' => $updatedByName,
+            'purchasingQr' => $purchasingQr,
+            'qcIncomingQr' => $qcIncomingQr,
+            'userQr' => $userQr,
             'docTypeCode' => $docTypeCode,
             'logoBase64' => $logoBase64,
-        ])->setPaper('a4', 'portrait');
+        ])->setPaper('a4', 'portrait')->setOptions(['isRemoteEnabled' => true]);
 
         $safeDocNo = str_replace(['/', '\\', ' '], ['-', '-', '_'], $receipt->documentno ?? 'document');
         $filename = 'GR_' . $safeDocNo . '.pdf';
@@ -755,6 +805,9 @@ class MaterialReceiptController extends Controller
     public function process(Request $request)
     {
         $materialReceiptConfig = config('idempiere.create-gr');
+        $workflowConfig = $materialReceiptConfig['workflow'] ?? [];
+        $reactivateAction = $workflowConfig['reactivate_action'] ?? 'RE';
+        $reactivateFrom = $workflowConfig['reactivate_from'] ?? ['CO'];
 
         $validated = $request->validate([
             'document_id' => 'required',
@@ -763,6 +816,152 @@ class MaterialReceiptController extends Controller
 
         try {
             $inoutId = Crypt::decryptString($validated['document_id']);
+
+            if ($validated['doc_action'] === $reactivateAction) {
+                $originalDoc = DB::connection('idempiere')
+                    ->table('m_inout')
+                    ->where('m_inout_id', $inoutId)
+                    ->first();
+
+                if (!$originalDoc) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Material Receipt not found'
+                    ], 404);
+                }
+
+                if (!in_array($originalDoc->docstatus, $reactivateFrom, true)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Re-Active hanya bisa dilakukan dari status yang diizinkan.'
+                    ], 422);
+                }
+
+                $originalLines = DB::connection('idempiere')
+                    ->table('m_inoutline')
+                    ->where('m_inout_id', $inoutId)
+                    ->where('isactive', 'Y')
+                    ->orderBy('line')
+                    ->get();
+
+                $newPayload = [
+                    'AD_Client_ID' => (int) $originalDoc->ad_client_id,
+                    'AD_Org_ID' => (int) $originalDoc->ad_org_id,
+                    'M_Warehouse_ID' => (int) $originalDoc->m_warehouse_id,
+                    'C_DocType_ID' => (int) $originalDoc->c_doctype_id,
+                    'MovementDate' => $originalDoc->movementdate,
+                    'DateAcct' => $originalDoc->dateacct ?? $originalDoc->movementdate,
+                    'MovementType' => $originalDoc->movementtype,
+                    'IsSOTrx' => $originalDoc->issotrx,
+                    'C_BPartner_ID' => $originalDoc->c_bpartner_id,
+                    'C_BPartner_Location_ID' => $originalDoc->c_bpartner_location_id,
+                    'Description' => $originalDoc->description,
+                    'SalesRep_ID' => $originalDoc->salesrep_id,
+                    'POReference' => $originalDoc->poreference,
+                    'C_Project_ID' => $originalDoc->c_project_id,
+                    'C_Order_ID' => $originalDoc->c_order_id,
+                ];
+
+                $newPayload = array_filter($newPayload, fn ($value) => !is_null($value));
+
+                Log::info('Re-Active Material Receipt: creating copied header', [
+                    'source_m_inout_id' => $inoutId,
+                    'payload' => $newPayload,
+                ]);
+
+                $newDocResponse = $this->idempiereService->post('models/m_inout', $newPayload);
+
+                if (!$newDocResponse->successful()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to create copied receipt: ' . $newDocResponse->body(),
+                    ], $newDocResponse->status() ?: 500);
+                }
+
+                $newDocData = $newDocResponse->json();
+                $newMInOutId = $newDocData['id'] ?? $newDocData['M_InOut_ID'] ?? $newDocData['recordID'] ?? null;
+
+                if (!$newMInOutId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to create copied receipt: new document ID not returned.',
+                    ], 500);
+                }
+
+                foreach ($originalLines as $line) {
+                    $linePayload = [
+                        'AD_Client_ID' => (int) $line->ad_client_id,
+                        'AD_Org_ID' => (int) $line->ad_org_id,
+                        'M_InOut_ID' => (int) $newMInOutId,
+                        'Line' => $line->line,
+                        'M_Locator_ID' => $line->m_locator_id,
+                        'M_Product_ID' => $line->m_product_id,
+                        'C_UOM_ID' => $line->c_uom_id,
+                        'MovementQty' => $line->movementqty,
+                        'QtyEntered' => $line->qtyentered,
+                        'Description' => $line->description,
+                        'C_OrderLine_ID' => $line->c_orderline_id,
+                        'IsActive' => true,
+                    ];
+
+                    $linePayload = array_filter($linePayload, fn ($value) => !is_null($value));
+
+                    $lineResponse = $this->idempiereService->post('models/m_inoutline', $linePayload);
+                    if (!$lineResponse->successful()) {
+                        $this->idempiereService->delete("models/m_inout/{$newMInOutId}");
+
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Failed to copy receipt lines: ' . $lineResponse->body(),
+                        ], $lineResponse->status() ?: 500);
+                    }
+                }
+
+                $reversePayload = ['doc-action' => 'RC'];
+
+                Log::info('Re-Active Material Receipt: reversing original document', [
+                    'm_inout_id' => $inoutId,
+                    'action' => 'RC',
+                ]);
+
+                $reverseResponse = $this->idempiereService->put("models/m_inout/{$inoutId}", $reversePayload);
+
+                if (!$reverseResponse->successful()) {
+                    $this->idempiereService->delete("models/m_inout/{$newMInOutId}");
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to reverse original receipt: ' . $reverseResponse->body(),
+                    ], $reverseResponse->status() ?: 500);
+                }
+
+                $originalDocNo = $originalDoc->documentno;
+                $newDocRecord = DB::connection('idempiere')
+                    ->table('m_inout')
+                    ->where('m_inout_id', $newMInOutId)
+                    ->first();
+
+                $newDocNo = $newDocRecord->documentno ?? null;
+
+                if ($originalDocNo && $newDocNo) {
+                    DB::connection('idempiere')
+                        ->table('m_inout')
+                        ->where('m_inout_id', $inoutId)
+                        ->update(['documentno' => $newDocNo]);
+
+                    DB::connection('idempiere')
+                        ->table('m_inout')
+                        ->where('m_inout_id', $newMInOutId)
+                        ->update(['documentno' => $originalDocNo]);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Document re-activated successfully',
+                    'data' => $reverseResponse->json(),
+                    'new_document_id' => Crypt::encryptString($newMInOutId),
+                ]);
+            }
 
             $payload = ['doc-action' => $validated['doc_action']];
 
@@ -912,15 +1111,12 @@ class MaterialReceiptController extends Controller
     {
         $orgId = $request->get('org_id');
         if (!$orgId)
-            return response()->json([]);
-
+            return response()->json([]); 
         $warehouses = DB::connection('idempiere')->select("
             SELECT w.m_warehouse_id AS id, w.name AS text
             FROM m_warehouse w
             WHERE w.isactive = 'Y' AND w.ad_org_id = ?
-            ORDER BY w.name
-        ", [$orgId]);
-
+            ORDER BY w.name", [$orgId]); 
         return response()->json($warehouses);
     }
 
@@ -965,7 +1161,7 @@ class MaterialReceiptController extends Controller
         return response()->json(['results' => $products, 'pagination' => ['more' => $hasMore]]);
     }
 
-    // API: Get PO Lines for linking (from completed/in-progress POs)
+    // API: Get PO Lines for linking (completed POs with remaining qty only)
     public function getPoLines(Request $request)
     {
         $materialReceiptConfig = config('idempiere.create-gr');
@@ -980,9 +1176,10 @@ class MaterialReceiptController extends Controller
             ->join('m_product as p', 'p.m_product_id', '=', 'ol.m_product_id')
             ->leftJoin('c_bpartner as bp', 'bp.c_bpartner_id', '=', 'o.c_bpartner_id')
             ->leftJoin('c_uom as u', 'ol.c_uom_id', '=', 'u.c_uom_id')
-            ->whereIn('o.docstatus', $materialReceiptConfig['purchase_order']['doc_statuses'])
+            ->where('o.docstatus', 'CO')
             ->where('o.issotrx', $materialReceiptConfig['purchase_order']['is_so_trx'])
             ->where('ol.ad_client_id', $clientId)
+            ->whereRaw('COALESCE(ol.qtyentered, 0) - COALESCE(ol.qtydelivered, 0) > 0')
             ->select(
                 'ol.c_orderline_id',
                 'o.documentno as po_documentno',
@@ -993,7 +1190,7 @@ class MaterialReceiptController extends Controller
                 'p.m_product_id',
                 'ol.qtyentered as ordered_qty',
                 'ol.qtydelivered as received_qty',
-                DB::raw('(ol.qtyentered - ol.qtydelivered) as remaining_qty'),
+                DB::raw('(COALESCE(ol.qtyentered, 0) - COALESCE(ol.qtydelivered, 0)) as remaining_qty'),
                 'u.uomsymbol as uom_symbol',
                 'u.name as uom_name'
             );
