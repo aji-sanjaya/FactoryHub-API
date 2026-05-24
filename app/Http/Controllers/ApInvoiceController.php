@@ -1255,12 +1255,53 @@ class ApInvoiceController extends Controller
                 abort(404);
             }
 
-            // Fetch Vendor
+            // Fetch Vendor with location and contact info
             $vendor = DB::connection('idempiere')
                 ->table('c_bpartner as bp')
+                ->leftJoin('c_bpartner_location as bpl', function ($join) use ($invoice) {
+                    $join->on('bpl.c_bpartner_id', '=', 'bp.c_bpartner_id')
+                        ->where('bpl.c_bpartner_location_id', '=', $invoice->c_bpartner_location_id);
+                })
+                ->leftJoin('c_location as loc', 'loc.c_location_id', '=', 'bpl.c_location_id')
+                ->leftJoin('ad_user as u', function ($join) use ($invoice) {
+                    $join->on('u.c_bpartner_id', '=', 'bp.c_bpartner_id')
+                        ->where('u.ad_user_id', '=', $invoice->ad_user_id ?? 0);
+                })
                 ->where('bp.c_bpartner_id', $invoice->c_bpartner_id)
-                ->select('bp.name as vendor_name')
+                ->select(
+                    'bp.c_bpartner_id',
+                    'bp.name as vendor_name',
+                    'bp.taxid',
+                    DB::raw("COALESCE(loc.address1, '') as address1"),
+                    DB::raw("COALESCE(loc.address2, '') as address2"),
+                    DB::raw("COALESCE(loc.city, '') as city"),
+                    DB::raw("COALESCE(u.name, '') as contact_name"),
+                    DB::raw("COALESCE(u.phone, '') as phone")
+                )
                 ->first();
+
+            // Fetch Client Name
+            $clientName = DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $invoice->ad_client_id)
+                ->value('name');
+
+            // Fetch Org address via c_bpartner → c_bpartner_location → c_location
+            $orgInfo = null;
+            try {
+                $orgInfo = DB::connection('idempiere')
+                    ->table('c_bpartner as bp')
+                    ->leftJoin('c_bpartner_location as bpl', function ($join) {
+                        $join->on('bp.c_bpartner_id', '=', 'bpl.c_bpartner_id')
+                             ->where('bpl.isactive', '=', 'Y');
+                    })
+                    ->leftJoin('c_location as locbp', 'bpl.c_location_id', '=', 'locbp.c_location_id')
+                    ->where('bp.c_bpartner_id', config('idempiere.client_id'))
+                    ->select('bp.taxid', 'locbp.address1', 'locbp.address2', 'locbp.address3')
+                    ->first();
+            } catch (\Exception $e) {
+                Log::warning('AP Invoice Org info fetch warning: ' . $e->getMessage());
+            }
 
             // Fetch PO DocumentNo if linked
             $poDocumentNo = null;
@@ -1277,19 +1318,40 @@ class ApInvoiceController extends Controller
                 ->where('c_paymentterm_id', $invoice->c_paymentterm_id)
                 ->value('name');
 
-            // Fetch Prepared By
+            // Fetch Signers Names from Custom Columns
+            $checkedBy = $invoice->adw_ad_user_verification_id ?
+                DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $invoice->adw_ad_user_verification_id)->value('name') : null;
+
+            $approvedBy = $invoice->adw_ad_user_approved_id ?
+                DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $invoice->adw_ad_user_approved_id)->value('name') : null;
+
+            // Creator as Prepared By
             $preparedBy = DB::connection('idempiere')
                 ->table('ad_user')
                 ->where('ad_user_id', $invoice->createdby)
                 ->value('name');
 
-            // Fetch Contact Name if ad_user_id exists
-            $contactName = null;
-            if ($invoice->ad_user_id) {
-                $contactName = DB::connection('idempiere')
-                    ->table('ad_user')
-                    ->where('ad_user_id', $invoice->ad_user_id)
-                    ->value('name');
+            $preparedDate = date('d M Y H:i', strtotime($invoice->created));
+            $preparedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Prepared by " . $preparedBy . " on " . $invoice->created);
+
+            // Checked By (Verification) — status logic
+            $checkedQr = null;
+            $checkedDate = 'Pending';
+            if ($checkedBy) {
+                if ($invoice->docstatus === 'CO' || $invoice->docstatus === 'CL') {
+                    $checkedDate = date('d M Y H:i', strtotime($invoice->updated));
+                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $invoice->updated);
+                }
+            }
+
+            // Approved By — status logic
+            $approvedQr = null;
+            $approvedDate = 'Pending';
+            if ($approvedBy) {
+                if ($invoice->docstatus === 'CO' || $invoice->docstatus === 'CL') {
+                    $approvedDate = date('d M Y H:i', strtotime($invoice->updated));
+                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $invoice->updated);
+                }
             }
 
             // Fetch Logo
@@ -1326,18 +1388,74 @@ class ApInvoiceController extends Controller
                 }
             }
 
+            // Fetch Lines
+            $lines = DB::connection('idempiere')
+                ->table('c_invoiceline as il')
+                ->leftJoin('m_product as p', 'il.m_product_id', '=', 'p.m_product_id')
+                ->leftJoin('c_uom as u', 'il.c_uom_id', '=', 'u.c_uom_id')
+                ->where('il.c_invoice_id', $invoice->c_invoice_id)
+                ->select(
+                    'il.*',
+                    'p.value as product_value',
+                    'p.name as product_name',
+                    'u.uomsymbol',
+                    'u.name as uom_name'
+                )
+                ->orderBy('il.line')
+                ->get();
+
+            // Fetch Tax Amount from c_invoicetax
+            $taxAmount = DB::connection('idempiere')
+                ->table('c_invoicetax as it')
+                ->where('it.c_invoice_id', $invoice->c_invoice_id)
+                ->sum('it.taxamt');
+
+            // Fetch Tax Name (optional, for display)
+            $taxName = DB::connection('idempiere')
+                ->table('c_invoicetax as it')
+                ->join('c_tax as t', 'it.c_tax_id', '=', 't.c_tax_id')
+                ->where('it.c_invoice_id', $invoice->c_invoice_id)
+                ->value('t.name');
+
+            $taxRate = DB::connection('idempiere')
+                ->table('c_invoicetax as it')
+                ->join('c_tax as t', 'it.c_tax_id', '=', 't.c_tax_id')
+                ->where('it.c_invoice_id', $invoice->c_invoice_id)
+                ->value('t.rate');
+
+            // Calculate Grand Total for spelling conversion
+            $subTotal = 0;
+            foreach ($lines as $line) {
+                $subTotal += ($line->qtyentered * $line->priceentered);
+            }
+            $withholdingTotal = $invoice->withholdingamount ?? 0;
+            $grandTotal = $subTotal + ($taxAmount ?? 0) - $withholdingTotal;
+            $grandTotalWords = \App\Http\Controllers\HelperController::numberToWordsIndonesian($grandTotal);
+
             $pdf = Pdf::loadView('pages.ap-invoice.pdf', [
                 'invoice' => $invoice,
                 'vendor' => $vendor,
                 'poDocumentNo' => $poDocumentNo,
                 'paymentTerm' => $paymentTerm,
                 'preparedBy' => $preparedBy,
-                'contactName' => $contactName,
+                'preparedDate' => $preparedDate,
+                'preparedQr' => $preparedQr,
+                'checkedBy' => $checkedBy,
+                'checkedDate' => $checkedDate,
+                'checkedQr' => $checkedQr,
+                'approvedBy' => $approvedBy,
+                'approvedDate' => $approvedDate,
+                'approvedQr' => $approvedQr,
                 'logoBase64' => $logoBase64,
-                'totalLines'      => $invoice->totallines ?? 0,
-                'taxAmount'       => ($invoice->grandtotal ?? 0) - ($invoice->totallines ?? 0),
-                'withholdingTotal'=> $invoice->withholdingamount ?? 0,
-                'grandTotalNet'   => ($invoice->grandtotal ?? 0) - ($invoice->withholdingamount ?? 0),
+                'lines' => $lines,
+                'clientName' => $clientName,
+                'orgInfo' => $orgInfo,
+                'taxAmount' => $taxAmount ?? 0,
+                'taxName' => $taxName ?? 'PPN',
+                'taxRate' => $taxRate ?? 0,
+                'withholdingTotal' => $withholdingTotal,
+                'grandTotalNet' => $grandTotal,
+                'grandTotalWords' => $grandTotalWords,
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'AP-Invoice-' . str_replace(['/', '\\'], '-', $invoice->documentno) . '.pdf';

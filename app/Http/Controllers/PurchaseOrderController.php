@@ -107,6 +107,23 @@ class PurchaseOrderController extends Controller
         $roleId = Session::get('idempiere_role');
         $clientId = Session::get('idempiere_client');
 
+        // --- Robust Client Name Fallback Logic (Session → DB → Config) ---
+        $userData = Session::get('user_data');
+        $tenantName = config('idempiere.tenant.name');
+        $clientName = null;
+        if (is_array($userData)) {
+            $clientName = trim((string) ($userData['client_name'] ?? '')) ?: null;
+        } elseif (is_object($userData)) {
+            $clientName = trim((string) ($userData->client_name ?? '')) ?: null;
+        }
+        if (!$clientName && $clientId) {
+            $clientName = \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $clientId)
+                ->value('name');
+        }
+        $clientName = $clientName ?: $tenantName;
+
         // Reuse Organization Logic (with fallback)
         $organizations = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
                 SELECT o.ad_org_id AS id, o.name AS text
@@ -317,6 +334,7 @@ class PurchaseOrderController extends Controller
             'taxesList' => $taxesList,
             'hasActiveWorkflow' => $hasActiveWorkflow,
             'purchaseOrderConfig' => $purchaseOrderConfig,
+            'clientName' => $clientName,
         ];
 
         // Set docTypeId explicitly
@@ -339,7 +357,7 @@ class PurchaseOrderController extends Controller
         if (request()->ajax() && request()->has('ajax_tab')) {
             $tab = request()->get('ajax_tab');
             if ($tab === 'header')
-                return view('pages.purchase-order.partials.tab-header', $viewData);
+                return view('pages.purchase-order.partials.tab-header', array_merge($viewData, ['clientName' => $clientName]));
             if ($tab === 'lines')
                 return view('pages.purchase-order.partials.tab-lines', $viewData);
             if ($tab === 'attachments') {

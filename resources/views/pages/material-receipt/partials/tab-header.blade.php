@@ -46,7 +46,7 @@
                     <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Client
                         <span class="text-red-500">*</span></label>
                     <div class="col-span-1 sm:col-span-2">
-                        <input type="text" value="{{ session('user_data.client_name') ?? 'Dharmamulia Prima Karya' }}" readonly
+                        <input type="text" value="{{ $clientName ?? $tenantName ?? '' }}" readonly
                             class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors">
                     </div>
                 </div>
@@ -86,29 +86,7 @@
                             </select>
                         @endif
                     </div>
-                </div>
-
-                <!-- Project -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Project</label>
-                    <div class="col-span-1 sm:col-span-2">
-                        @if($isReadOnly)
-                            <input type="text" value="{{ $displayProject }}" readonly
-                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors">
-                        @else
-                            <select id="c_project_id" name="c_project_id" class="w-full text-base" {{ $isReadOnly ? 'disabled' : '' }}>
-                                <option value="">- Select Project -</option>
-                                @if(isset($projects))
-                                    @foreach($projects as $proj)
-                                        <option value="{{ $proj->id }}" {{ (!$isNew && $receipt->c_project_id == $proj->id) ? 'selected' : '' }}>
-                                            {{ $proj->text }}
-                                        </option>
-                                    @endforeach
-                                @endif
-                            </select>
-                        @endif
-                    </div>
-                </div>
+                </div> 
 
                 <!-- Description -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-start gap-2 sm:gap-4">
@@ -152,32 +130,20 @@
                     </div>
                 </div>
 
-                <!-- Vendor -->
+                <!-- Project -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Vendor
-                        <span class="text-red-500">*</span></label>
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Project</label>
                     <div class="col-span-1 sm:col-span-2">
                         @if($isReadOnly)
-                            <input type="text" value="{{ $displayVendor }}" readonly
+                            <input type="text" value="{{ $displayProject }}" readonly
                                 class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors">
-                        @elseif($hasLines)
-                            {{-- Locked: receipt already has lines, vendor cannot be changed --}}
-                            <div class="w-full px-3.5 py-2.5 text-sm bg-gray-100 border border-gray-200 rounded-lg text-gray-700 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 flex items-center justify-between">
-                                <span>{{ $displayVendor }}</span>
-                                <span class="ml-2 inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 whitespace-nowrap">
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                                    Locked
-                                </span>
-                            </div>
-                            <input type="hidden" name="c_bpartner_id" value="{{ $receipt->c_bpartner_id }}">
                         @else
-                            <select id="c_bpartner_id" {{ $isReadOnly ? 'disabled' : '' }}
-                                class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
-                                <option value="">- Select Vendor -</option>
-                                @if(isset($vendors))
-                                    @foreach($vendors as $vendor)
-                                        <option value="{{ $vendor->id }}" {{ (!$isNew && $receipt->c_bpartner_id == $vendor->id) ? 'selected' : '' }}>
-                                            {{ $vendor->text }}
+                            <select id="c_project_id" name="c_project_id" class="w-full text-base" {{ $isReadOnly ? 'disabled' : '' }}>
+                                <option value="">- Select Project -</option>
+                                @if(isset($projects))
+                                    @foreach($projects as $proj)
+                                        <option value="{{ $proj->id }}" {{ (!$isNew && $receipt->c_project_id == $proj->id) ? 'selected' : '' }}>
+                                            {{ $proj->text }}
                                         </option>
                                     @endforeach
                                 @endif
@@ -219,6 +185,52 @@
                         @endif
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section: Material Receipt Details -->
+    <div class="mb-8">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center mb-4">
+            <span class="w-1 h-6 bg-blue-500 rounded mr-3"></span>
+            Material Receipt Details
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6 bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <!-- Left Column -->
+            <div class="space-y-5">
+                <!-- Vendor -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Vendor
+                        <span class="text-red-500">*</span></label>
+                    <div class="col-span-1 sm:col-span-2">
+                        @if($isReadOnly)
+                            <input type="text" value="{{ $displayVendor }}" readonly
+                                class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors">
+                        @elseif($hasLines)
+                            {{-- Locked: receipt already has lines, vendor cannot be changed --}}
+                            <div class="w-full px-3.5 py-2.5 text-sm bg-gray-100 border border-gray-200 rounded-lg text-gray-700 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 flex items-center justify-between">
+                                <span>{{ $displayVendor }}</span>
+                                <span class="ml-2 inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 whitespace-nowrap">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                    Locked
+                                </span>
+                            </div>
+                            <input type="hidden" name="c_bpartner_id" value="{{ $receipt->c_bpartner_id }}">
+                        @else
+                            <select id="c_bpartner_id" {{ $isReadOnly ? 'disabled' : '' }}
+                                class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                                <option value="">- Select Vendor -</option>
+                                @if(isset($vendors))
+                                    @foreach($vendors as $vendor)
+                                        <option value="{{ $vendor->id }}" {{ (!$isNew && $receipt->c_bpartner_id == $vendor->id) ? 'selected' : '' }}>
+                                            {{ $vendor->text }}
+                                        </option>
+                                    @endforeach
+                                @endif
+                            </select>
+                        @endif
+                    </div>
+                </div>
 
                 <!-- Warehouse -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
@@ -241,6 +253,45 @@
                                 @endif
                             </select>
                         @endif
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="space-y-5">
+                <!-- Checked By -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Checked By</label>
+                    <div class="col-span-1 sm:col-span-2">
+                        <select id="adw_ad_user_checked_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                            <option value="">- Select -</option>
+                            @if(isset($users))
+                                @foreach($users as $user)
+                                    <option value="{{ $user->id }}" {{ (!$isNew && ($receipt->adw_ad_user_checked_id ?? null) == $user->id) ? 'selected' : '' }}>
+                                        {{ $user->text }}
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Approved By -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Approved By</label>
+                    <div class="col-span-1 sm:col-span-2">
+                        <select id="adw_ad_user_approved_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                            <option value="">- Select -</option>
+                            @if(isset($users))
+                                @foreach($users as $user)
+                                    <option value="{{ $user->id }}" {{ (!$isNew && ($receipt->adw_ad_user_approved_id ?? null) == $user->id) ? 'selected' : '' }}>
+                                        {{ $user->text }}
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select>
                     </div>
                 </div>
             </div>

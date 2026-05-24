@@ -23,10 +23,8 @@
         }
         
         /* Header */
-        .header-table {
-            margin-bottom: 2px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 5px;
+        .header-table { 
+            border-bottom: none; 
         }
         .header-table td {
             vertical-align: top;
@@ -72,6 +70,7 @@
             font-weight: bold;
             margin: 10px 0;
             text-transform: uppercase;
+            border-bottom: none;
         }
 
         /* Info Section */
@@ -209,7 +208,7 @@
                     <table class="header-table">
                         <!-- Row 1: Company Address | Logo + Title -->
                             <tr>
-                                <td style="border-bottom: 1px solid black; padding: 8px; width: 60%; vertical-align: top;">
+                                <td style="border-bottom: none; padding: 8px; width: 60%; vertical-align: top;">
                                     <strong style="font-size: 13pt;">{{ $clientName ?? '' }}</strong><br>
                                     @if(!empty($orgInfo))
                                         @if(!empty($orgInfo->address1))<span style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
@@ -217,16 +216,14 @@
                                         @if(!empty($orgInfo->address3))<span style="font-size: 9pt;">{{ $orgInfo->address3 }}</span>@endif
                                     @endif
                                 </td>
-                                <td style="border-bottom: 1px solid black; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
+                                <td style="border-bottom: none; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
                                     @if(!empty($logoBase64))
                                         <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;"><br>
-                                    @endif 
+                                    @endif  
+                                     <span class="doc-title">Purchase Order</span>
                                 </td>
                             </tr>
-                    </table>
-                    <div style="text-align: right; font-size: 8pt; margin-top: 2px;">Page 1 / 1</div>
-
-                    <div class="doc-title">Purchase Order</div>
+                    </table> 
 
                     <!-- Info Box -->
                     <div class="info-container">

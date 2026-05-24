@@ -1282,6 +1282,10 @@ class ArInvoiceController extends Controller
                 }
             }
 
+            // Calculate Grand Total spelled-out words
+            $grandTotal = $invoice->grandtotal ?? 0;
+            $grandTotalWords = \App\Http\Controllers\HelperController::numberToWordsIndonesian($grandTotal);
+
             $pdf = Pdf::loadView('pages.ar-invoice.pdf', [
                 'invoice' => $invoice,
                 'customer' => $customer,
@@ -1290,6 +1294,7 @@ class ArInvoiceController extends Controller
                 'preparedBy' => $preparedBy,
                 'contactName' => $contactName,
                 'logoBase64' => $logoBase64,
+                'grandTotalWords' => $grandTotalWords,
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'AR-Invoice-' . str_replace(['/', '\\'], '-', $invoice->documentno) . '.pdf';

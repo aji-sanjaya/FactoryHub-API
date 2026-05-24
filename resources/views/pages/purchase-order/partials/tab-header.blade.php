@@ -29,7 +29,7 @@
                     <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Client
                         <span class="text-red-500">*</span></label>
                     <div class="col-span-1 sm:col-span-2">
-                        <input type="text" value="{{ $clientName ?? 'Dharmamulia Prima Karya' }}" readonly
+                        <input type="text" value="{{ $clientName }}" readonly
                             class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors">
                     </div>
                 </div>

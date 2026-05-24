@@ -95,6 +95,24 @@ class MaterialReceiptController extends Controller
 
         $roleId = Session::get('idempiere_role');
         $clientId = Session::get('idempiere_client');
+        $tenantName = config('idempiere.tenant.name');
+
+        $userData = Session::get('user_data');
+        $clientName = null;
+        if (is_array($userData)) {
+            $clientName = trim((string) ($userData['client_name'] ?? '')) ?: null;
+        } elseif (is_object($userData)) {
+            $clientName = trim((string) ($userData->client_name ?? '')) ?: null;
+        }
+
+        if (!$clientName && $clientId) {
+            $clientName = DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $clientId)
+                ->value('name');
+        }
+
+        $clientName = $clientName ?: $tenantName;
 
         // Organizations
         $organizations = DB::connection('idempiere')->select("
@@ -153,6 +171,13 @@ class MaterialReceiptController extends Controller
             ORDER BY value
         ", [$clientId]);
 
+        $users = DB::connection('idempiere')->select("
+            SELECT ad_user_id AS id, name AS text
+            FROM ad_user
+            WHERE ad_client_id = ? AND isactive = 'Y'
+            ORDER BY name
+        ", [$clientId]);
+
         // Lines
         if ($receipt) {
             $linePerPage = $materialReceiptConfig['limits']['line_default_per_page'];
@@ -207,6 +232,9 @@ class MaterialReceiptController extends Controller
             'vendors' => $vendors,
             'docTypes' => $docTypes,
             'projects' => $projects,
+            'users' => $users,
+            'tenantName' => $tenantName,
+            'clientName' => $clientName,
             'isNew' => is_null($receipt),
             'docNo' => $receipt ? $receipt->documentno : '** New **',
             'status' => $statusLabel,
@@ -392,6 +420,30 @@ class MaterialReceiptController extends Controller
             }
         }
 
+        $checkedByLabel = 'QC Incomming';
+        if (!empty($receipt->adw_ad_user_checked_id)) {
+            $checkedByUser = DB::connection('idempiere')
+                ->table('ad_user')
+                ->where('ad_user_id', $receipt->adw_ad_user_checked_id)
+                ->select('description', 'name')
+                ->first();
+            if ($checkedByUser) {
+                $checkedByLabel = trim((string) ($checkedByUser->description ?: $checkedByUser->name)) ?: 'QC Incomming';
+            }
+        }
+
+        $approvedByLabel = 'Purchasing';
+        if (!empty($receipt->adw_ad_user_approved_id)) {
+            $approvedByUser = DB::connection('idempiere')
+                ->table('ad_user')
+                ->where('ad_user_id', $receipt->adw_ad_user_approved_id)
+                ->select('description', 'name')
+                ->first();
+            if ($approvedByUser) {
+                $approvedByLabel = trim((string) ($approvedByUser->description ?: $approvedByUser->name)) ?: 'Purchasing';
+            }
+        }
+
         // QR Codes for LEGALIZATION footer (api.qrserver.com)
         $qrBase = 'https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=';
 
@@ -505,6 +557,8 @@ class MaterialReceiptController extends Controller
             'warehouseAddress' => $warehouseAddress,
             'receivedByName' => $receivedByName,
             'updatedByName' => $updatedByName,
+            'checkedByLabel' => $checkedByLabel,
+            'approvedByLabel' => $approvedByLabel,
             'purchasingQr' => $purchasingQr,
             'qcIncomingQr' => $qcIncomingQr,
             'userQr' => $userQr,
@@ -531,6 +585,8 @@ class MaterialReceiptController extends Controller
             'doc_type_id' => 'required',
             'description' => 'nullable|string',
             'c_project_id' => 'nullable',
+            'adw_ad_user_checked_id' => 'nullable',
+            'adw_ad_user_approved_id' => 'nullable',
         ]);
 
         $userData = Session::get('user_data');
@@ -588,6 +644,16 @@ class MaterialReceiptController extends Controller
                 $data = $response->json();
                 $id = $data['id'] ?? $data['M_InOut_ID'] ?? $data['recordID'] ?? null;
 
+                if ($id && (!empty($validated['adw_ad_user_checked_id']) || !empty($validated['adw_ad_user_approved_id']))) {
+                    DB::connection('idempiere')
+                        ->table('m_inout')
+                        ->where('m_inout_id', $id)
+                        ->update([
+                            'adw_ad_user_checked_id' => !empty($validated['adw_ad_user_checked_id']) ? (int) $validated['adw_ad_user_checked_id'] : null,
+                            'adw_ad_user_approved_id' => !empty($validated['adw_ad_user_approved_id']) ? (int) $validated['adw_ad_user_approved_id'] : null,
+                        ]);
+                }
+
                 return response()->json([
                     'message' => 'Material Receipt created successfully',
                     'data' => [
@@ -617,6 +683,8 @@ class MaterialReceiptController extends Controller
             'doc_type_id' => 'nullable',
             'description' => 'nullable|string',
             'c_project_id' => 'nullable',
+            'adw_ad_user_checked_id' => 'nullable',
+            'adw_ad_user_approved_id' => 'nullable',
         ]);
 
         $payload = [];
@@ -640,6 +708,16 @@ class MaterialReceiptController extends Controller
         try {
             $response = $this->idempiereService->put("models/m_inout/{$id}", $payload);
             if ($response->successful()) {
+                if (array_key_exists('adw_ad_user_checked_id', $validated) || array_key_exists('adw_ad_user_approved_id', $validated)) {
+                    DB::connection('idempiere')
+                        ->table('m_inout')
+                        ->where('m_inout_id', $id)
+                        ->update([
+                            'adw_ad_user_checked_id' => !empty($validated['adw_ad_user_checked_id']) ? (int) $validated['adw_ad_user_checked_id'] : null,
+                            'adw_ad_user_approved_id' => !empty($validated['adw_ad_user_approved_id']) ? (int) $validated['adw_ad_user_approved_id'] : null,
+                        ]);
+                }
+
                 return response()->json(['message' => 'Material Receipt updated successfully']);
             } else {
                 return response()->json(['message' => 'API Error: ' . $response->body()], $response->status());

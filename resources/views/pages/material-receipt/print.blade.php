@@ -310,13 +310,15 @@
                     <td style="border:1px solid #000; width:18%; vertical-align:middle; text-align:center; padding:3px;">
                         @if(!empty($userQr))
                             <img src="{{ $userQr }}" alt="QR" style="height:58px; width:58px; margin-top:15px; margin-bottom:15px;">
+                        @else 
+                            <div style="margin:0 auto; height:58px; width:58px; margin-top:15px; font-weight:bold;">DRAFT</div>
                         @endif
                     </td>
                 </tr>
                 {{-- Row 3: name labels --}}
                 <tr>
-                    <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">Purchasing</td>
-                    <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">QC Incoming</td>
+                    <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">{{ $approvedByLabel ?? 'Purchasing' }}</td>
+                    <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">{{ $checkedByLabel ?? 'QC Incomming' }}</td>
                     <td style="border:1px solid #000; text-align:center; vertical-align:top; padding:2px 4px; font-size:9pt; line-height:1;">{{ $updatedByName ?: 'User' }}</td>
                 </tr>
             </tbody>
@@ -324,7 +326,7 @@
         {{-- Doc number + printed date --}}
         <table style="width:100%; border-collapse:collapse; margin-top:3px;">
             <tr>
-                <td style="text-align:left; font-size:8pt;">{{ $receipt->documentno }}</td>
+                <td style="text-align:left; font-size:8pt;">API/RC/PURCH/01/03</td>
                 <td style="text-align:right; font-size:8pt;">Printed : {{ now()->format('d-M-Y H:i:s') }}</td>
             </tr>
         </table>

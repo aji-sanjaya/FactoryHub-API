@@ -1,310 +1,475 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>AP Invoice {{ $invoice->documentno }}</title>
     <style>
         @page {
             margin: 1cm;
         }
+
         body {
             font-family: Arial, sans-serif;
-            font-size: 10pt;
+            font-size: 9pt;
             margin: 0;
             padding: 0;
             color: #000;
         }
-        .container {
-            width: 100%;
-        }
+
         table {
             width: 100%;
             border-collapse: collapse;
         }
-        
-        /* Header */
+
         .header-table {
-            margin-bottom: 10px;
-            border: 2px solid #000;
+            border-bottom: none;
         }
+
         .header-table td {
-            vertical-align: middle;
-            padding: 8px;
+            vertical-align: top;
+            padding: 2px;
         }
-        .logo-cell {
-            width: 80px;
-            text-align: center;
-            border-right: 2px solid #000;
-        }
+
         .logo-box {
             width: 60px;
             height: 60px;
             background-color: #FACC15;
-            display: inline-block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             color: white;
             font-weight: bold;
             font-size: 40px;
+            border: 1px solid #EAB308;
+            text-align: center;
             line-height: 60px;
-            text-align: center;
-        }
-        .title-cell {
-            text-align: center;
-        }
-        .doc-title {
-            font-size: 16pt;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .company-name {
-            font-size: 12pt;
-            font-weight: bold;
-        }
-        .doc-info-cell {
-            width: 200px;
-            border-left: 2px solid #000;
-            font-size: 9pt;
-            line-height: 1.6;
-        }
-        .doc-info-cell table {
-            width: 100%;
-        }
-        .doc-info-cell td {
-            padding: 2px 4px;
         }
 
-        /* Document Details */
-        .details-section {
-            margin-top: 15px;
+        .company-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #EAB308;
+            text-transform: uppercase;
+            text-align: center;
+            margin-bottom: 5px;
         }
-        .details-row {
-            margin-bottom: 8px;
+
+        .company-address {
+            text-align: center;
+            font-size: 8pt;
+            line-height: 1.2;
         }
-        .details-label {
-            display: inline-block;
-            width: 150px;
-            font-weight: normal;
+
+        .doc-title {
+            text-align: center;
+            font-size: 14pt;
+            font-weight: bold;
+            margin: 10px 0;
+            text-transform: uppercase;
+            border-bottom: none;
         }
-        .details-colon {
-            display: inline-block;
-            width: 15px;
-        }
-        .details-value {
-            display: inline-block;
-        }
-        
-        /* Status Section */
-        .status-section {
-            margin: 20px 0;
+
+        .info-container {
+            border: none;
             padding: 10px;
-            border: 1px solid #000;
+            margin-bottom: 15px;
         }
-        .status-title {
+
+        .info-table td {
+            vertical-align: top;
+            padding: 3px 5px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 100px;
+        }
+
+        .colon {
+            width: 10px;
+            text-align: center;
+        }
+
+        .items-table {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .items-table th {
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 8px 5px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 9pt;
+        }
+
+        .items-table td {
+            padding: 8px 5px;
+            vertical-align: top;
+        }
+
+        .items-table td.qty,
+        .items-table td.price,
+        .items-table td.amount {
+            text-align: right;
+        }
+
+        .totals-table {
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .totals-table td {
+            padding: 5px;
+            text-align: right;
+        }
+
+        .totals-label {
+            font-weight: bold;
+        }
+
+        .totals-grand-total td {
+            border-top: 0px solid #000;
+            padding-top: 6px;
+        }
+
+        .notes-section {
+            margin-top: 20px;
+            font-size: 9pt;
+        }
+
+        .notes-section strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .notes-content {
+            margin-bottom: 15px;
+            white-space: pre-wrap;
+            text-align: left;
+            border: none;
+            padding: 10px;
+        }
+
+        .provision-section {
+            margin-top: 10px;
+            font-size: 9pt;
+            font-style: italic;
+        }
+
+        .provision-list {
+            list-style-type: decimal;
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+
+        .provision-list li {
+            margin-bottom: 2px;
+            padding-left: 5px;
+        }
+
+        .signature-section {
+            margin-top: 30px;
+            width: 100%;
+        }
+
+        .signature-table td {
+            text-align: center;
+            vertical-align: top;
+            width: 25%;
+            padding: 10px;
+        }
+
+        .sig-title {
             font-weight: bold;
             margin-bottom: 10px;
         }
-        .checkbox-group {
-            display: inline-block;
-            margin-right: 40px;
-        }
-        .checkbox {
-            display: inline-block;
-            width: 15px;
-            height: 15px;
-            border: 1px solid #000;
-            margin-right: 5px;
-            vertical-align: middle;
-        }
 
-        /* Signature Section */
-        .signature-section {
-            margin-top: 60px;
-        }
-        .signature-table {
-            width: 100%;
-        }
-        .signature-table td {
-            text-align: center;
-            vertical-align: bottom;
-            padding: 10px;
-        }
-        .sig-title {
+        .sig-name {
             font-weight: bold;
-            margin-bottom: 60px;
-        }
-        .sig-line {
             border-bottom: 1px solid #000;
             display: inline-block;
-            min-width: 150px;
+            min-width: 120px;
             padding-bottom: 2px;
         }
 
-        /* Utilities */
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .font-bold { font-weight: bold; }
-        .border-top { border-top: 2px solid #000; }
+        .sig-role {
+            font-size: 8pt;
+            margin-top: 2px;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .font-bold {
+            font-weight: bold;
+        }
+
+        .border-top {
+            border-top: 2px solid #000;
+        }
+
+        .border-bottom {
+            border-bottom: 2px solid #000;
+        }
+
+        /* Terbilang Table */
+        .terbilang-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            margin-top: 15px;
+        }
+
+        .terbilang-table td {
+            border: 1px solid #000;
+            padding: 5px 8px;
+            font-weight: bold;
+        }
+
+        .terbilang-value {
+            font-style: italic;
+        }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <!-- Header -->
-        <table class="header-table">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
             <tr>
-                <td class="logo-cell">
-                    @if(!empty($logoBase64))
-                        <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 60px; width: auto;">
-                    @else
-                        <div class="logo-box">D</div>
+                <td style="padding: 0;">
+                    <!-- Header -->
+                    <table class="header-table">
+                        <tr>
+                            <td style="border-bottom: none; padding: 8px; width: 60%; vertical-align: top;">
+                                <strong style="font-size: 13pt;">{{ $clientName ?? '' }}</strong><br>
+                                @if(!empty($orgInfo))
+                                    @if(!empty($orgInfo->address1))<span
+                                    style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
+                                    @if(!empty($orgInfo->address2))<span
+                                    style="font-size: 9pt;">{{ $orgInfo->address2 }}</span><br>@endif
+                                    @if(!empty($orgInfo->address3))<span
+                                    style="font-size: 9pt;">{{ $orgInfo->address3 }}</span>@endif
+                                @endif
+                            </td>
+                            <td
+                                style="border-bottom: none; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
+                                @if(!empty($logoBase64))
+                                    <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;"><br>
+                                @endif
+                                <span class="doc-title">AP Invoice</span>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Info Box -->
+                    <div class="info-container">
+                        <table class="info-table">
+                            <tr>
+                                <!-- Left Column -->
+                                <td width="50%">
+                                    <table>
+                                        <tr>
+                                            <td class="info-label">Vendor</td>
+                                            <td class="colon">:</td>
+                                            <td><strong>{{ $vendor->vendor_name ?? '-' }}</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Address</td>
+                                            <td class="colon">:</td>
+                                            <td>
+                                                {{ $vendor->address1 }}<br>
+                                                {{ $vendor->address2 }} {{ $vendor->city }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Contact Person</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $vendor->contact_name ?? '-' }}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                                <!-- Right Column -->
+                                <td width="50%" style="border-left: 1px solid #000; padding-left: 10px;">
+                                    <table>
+                                        <tr>
+                                            <td class="info-label">Invoice No</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $invoice->documentno }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Date</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ \Carbon\Carbon::parse($invoice->dateinvoiced)->format('d M Y') }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Supplier Ref No</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $invoice->supplierref ?? '-' }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Payment Term</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $paymentTerm ?? '-' }}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding: 0;">
+                    <!-- Items Table -->
+                    <table class="items-table" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th width="5%">NO</th>
+                                <th width="48%">Description</th>
+                                <th width="8%" style="text-align: right;">Qty</th>
+                                <th width="8%">UOM</th>
+                                <th width="15%" style="text-align: right;">Price</th>
+                                <th width="16%" style="text-align: right;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $subTotal = 0; @endphp
+                            @foreach($lines as $index => $line)
+                                @php
+                                    $lineAmount = $line->qtyentered * $line->priceentered;
+                                    $subTotal += $lineAmount;
+                                @endphp
+                                <tr>
+                                    <td style="padding-bottom: 0;">{{ $index + 1 }}</td>
+                                    <td style="padding-bottom: 0; font-weight: bold;">
+                                        {{ $line->product_value ?? '' }}
+                                    </td>
+                                    <td class="qty" style="padding-bottom: 0;">{{ number_format($line->qtyentered, 0) }}
+                                    </td>
+                                    <td style="padding-bottom: 0;">{{ $line->uomsymbol ?? $line->uom_name }}</td>
+                                    <td class="price" style="padding-bottom: 0;">{{ number_format($line->priceentered, 2) }}
+                                    </td>
+                                    <td class="amount" style="padding-bottom: 0;">{{ number_format($lineAmount, 2) }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding-top: 1px;"></td>
+                                    <td colspan="5" style="padding-top: 1px; font-size: 8pt; color: #444;">
+                                        {{ $line->product_name ?? ($line->description ?? '-') }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                            <tr>
+                                <td colspan="7" class="border-top"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Totals + Notes -->
+                    <table style="width: 100%; margin-top: 5px;" cellspacing="0">
+                        <tr>
+                            <!-- Notes (left 60%) -->
+                            <td width="60%" style="vertical-align: top; padding-right: 10px;">
+                                <div class="notes-section" style="margin-top: 0;">
+                                    <strong>Note :</strong>
+                                    <div class="notes-content">{{ trim($invoice->description ?? '') }}</div>
+                                </div>
+                            </td>
+                            <!-- Totals (right 40%) -->
+                            <td width="40%" style="vertical-align: top;">
+                                <table class="totals-table" style="width: 100%;">
+                                    <tr>
+                                        <td class="totals-label">Total Amount :</td>
+                                        <td>{{ number_format($subTotal, 2) }}</td>
+                                    </tr>
+                                    @php $withholdingTotal = $withholdingTotal ?? 0; @endphp
+                                    @if($withholdingTotal > 0)
+                                        <tr>
+                                            <td class="totals-label">PPh23 :</td>
+                                            <td style="color: #c05621;">({{ number_format($withholdingTotal, 2) }})</td>
+                                        </tr>
+                                    @endif
+                                    <tr class="totals-grand-total">
+                                        <td class="totals-label">Grand Total :</td>
+                                        <td><strong>{{ number_format($subTotal + ($taxAmount ?? 0) - $withholdingTotal, 2) }}</strong>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Terbilang Text -->
+                    <table class="terbilang-table">
+                        <tr>
+                            <td style="width: 100%;" class="terbilang-value"
+                                style="margin-top: 15px; margin-bottom: 15px;">
+                                <br>
+                                <span style="padding: 20px">{{ $grandTotalWords }}</span>
+                                <br><br>
+                            </td>
+                        </tr>
+                    </table>
+
+                    @if(count($lines) > 5)
+                        <div style="page-break-before: always;"></div>
                     @endif
-                </td>
-                <td class="title-cell">
-                    <div class="doc-title">TANDA TERIMA TAGIHAN</div>
-                    <div class="company-name">PT. DHARMAMULIA PRIMA KARYA</div>
-                </td>
-                <td class="doc-info-cell">
-                    <table>
+
+                    <!-- Signatures -->
+                    <table class="signature-table">
                         <tr>
-                            <td style="width: 60px;">No. Dokumen</td>
-                            <td style="width: 5px;">:</td>
-                            <td>FM/FAT/02-001</td>
-                        </tr>
-                        <tr>
-                            <td>Revisi</td>
-                            <td>:</td>
-                            <td>00</td>
-                        </tr>
-                        <tr>
-                            <td>Tgl Terbit</td>
-                            <td>:</td>
-                            <td>29 Oktober 2025</td>
-                        </tr>
-                        <tr>
-                            <td>Halaman</td>
-                            <td>:</td>
-                            <td>01</td>
+                            <td>
+                                <div class="sig-title">Prepared By</div>
+                                @if(isset($preparedQr) && $preparedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $preparedQr }}" alt="QR"
+                                            style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $preparedBy ?? '..................' }}</div>
+                                <div class="sig-role" style="font-weight: bold;">Finance</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $preparedDate ?? '' }})</div>
+                            </td>
+                            <td>
+                                <div class="sig-title">Checked By</div>
+                                @if(isset($checkedQr) && $checkedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $checkedQr }}" alt="QR"
+                                            style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $checkedBy ?? '..................' }}</div>
+                                <div class="sig-role" style="font-weight: bold;">FAT</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $checkedDate ?? '' }})</div>
+                            </td>
+                            <td>
+                                <div class="sig-title">Approved By</div>
+                                @if(isset($approvedQr) && $approvedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $approvedQr }}" alt="QR"
+                                            style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $approvedBy ?? '..................' }}</div>
+                                <div class="sig-role" style="font-weight: bold;">Director</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $approvedDate ?? '' }})</div>
+                            </td>
                         </tr>
                     </table>
                 </td>
             </tr>
-        </table>
-
-        <div style="text-align: right; font-size: 9pt; margin-bottom: 10px;">
-            {{-- Page 1 / 1 --}}
-        </div>
-
-        <!-- Invoice Number and Date -->
-        <div style="border: 1px solid #000; padding: 10px; margin-bottom: 10px;">
-            <table style="width: 100%;">
-                <tr>
-                    <td style="width: 50px; font-weight: bold;">No</td>
-                    <td style="width: 5px;">:</td>
-                    <td>{{ $invoice->documentno }}</td>
-                    <td style="width: 150px; text-align: right;">Page 1 / 1</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold;">Tanggal</td>
-                    <td>:</td>
-                    <td colspan="2">{{ \Carbon\Carbon::parse($invoice->dateinvoiced)->format('d M Y') }}</td>
-                </tr>
-            </table>
-        </div>
-
-        <!-- Status Checkboxes -->
-        <div class="status-section">
-            <div class="status-title">Status</div>
-            <div>
-                <span class="checkbox-group">
-                    <span class="checkbox"></span> Diterima
-                </span>
-                <span class="checkbox-group">
-                    <span class="checkbox"></span> Dikembalikan
-                </span>
-                <span style="margin-left: 100px;">*Coret yang tidak perlu</span>
-            </div>
-        </div>
-
-        <!-- Invoice Details -->
-        <div class="details-section">
-            <div class="details-row">
-                <span class="details-label">Vendor/supplier</span>
-                <span class="details-colon">:</span>
-                <span class="details-value font-bold">{{ $vendor->vendor_name ?? '-' }}</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label">No Invoice</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">{{ $invoice->documentno }}</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label">No PO</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">{{ $poDocumentNo ?? '-' }}</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label">Tanggal Invoice</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">{{ \Carbon\Carbon::parse($invoice->dateinvoiced)->format('d M Y') }}</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label">Jatuh Tempo</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">{{ $invoice->duedate ? \Carbon\Carbon::parse($invoice->duedate)->format('d M Y') : '-' }}</span>
-            </div>
-        </div>
-
-        <div style="border-top: 1px solid #000; margin: 20px 0;"></div>
-
-        <!-- Financial Details -->
-        <div class="details-section">
-            <div class="details-row">
-                <span class="details-label">Nominal Invoice</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">{{ number_format($totalLines ?? 0, 2, '.', ',') }}</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label">Total Tax Amount</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">{{ number_format($taxAmount ?? 0, 2, '.', ',') }}</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label">Total PPh23</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">({{ number_format($withholdingTotal ?? 0, 2, '.', ',') }})</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label font-bold">Grand Total</span>
-                <span class="details-colon">:</span>
-                <span class="details-value font-bold">{{ number_format($grandTotalNet ?? 0, 2, '.', ',') }}</span>
-            </div>
-            <div class="details-row">
-                <span class="details-label">Term Of Payment</span>
-                <span class="details-colon">:</span>
-                <span class="details-value">{{ $paymentTerm ?? '-' }}</span>
-            </div>
-        </div>
-
-        <!-- Signature Section -->
-        <div class="signature-section">
-            <div style="margin-bottom: 10px; font-style: italic;">
-                Bekasi, {{ \Carbon\Carbon::parse($invoice->dateinvoiced)->format('d F Y') }}
-            </div>
-            <table class="signature-table">
-                <tr>
-                    <td style="width: 33%;">
-                        <div class="sig-title">Prepared By</div>
-                        <div class="sig-line">{{ $preparedBy ?? 'Super User with Access' }}</div>
-                    </td>
-                    <td style="width: 33%;">
-                        <div class="sig-title">Approved By</div>
-                        <div class="sig-line">-</div>
-                    </td>
-                    <td style="width: 33%;">
-                        <div class="sig-title">Approved By</div>
-                        <div class="sig-line">-</div>
-                    </td>
-                </tr>
-            </table>
-        </div>
-    </div>
+        </tbody>
+    </table>
 </body>
+
 </html>

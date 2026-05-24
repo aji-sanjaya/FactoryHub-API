@@ -4,6 +4,9 @@ return [
 
     'client_id' => (int) env('IDEMPIERE_CLIENT_ID', 1000000), 
     'org_id' => (int) env('IDEMPIERE_ORG_ID', 0),
+    'tenant' => [
+        'name' => env('IDEMPIERE_TENANT_NAME', 'Dharmamulia Prima Karya'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -249,7 +249,7 @@
 
         <script>
         function initScripts() {
-            $('#c_bpartner_id, #org_id, #warehouse_id, #doc_type_id, #c_project_id').select2({
+            $('#c_bpartner_id, #org_id, #warehouse_id, #doc_type_id, #c_project_id, #adw_ad_user_checked_id, #adw_ad_user_approved_id').select2({
                 width: '100%', placeholder: '- Select -'
             });
             $('#c_project_id').select2({ width: '100%', placeholder: '- Select -', allowClear: true }); 
@@ -380,6 +380,8 @@
                 doc_type_id:             $('#doc_type_id').val(),
                 description:             document.getElementById('description')?.value,
                 c_project_id:            $('#c_project_id').val() || null,
+                adw_ad_user_checked_id:  $('#adw_ad_user_checked_id').val() || null,
+                adw_ad_user_approved_id: $('#adw_ad_user_approved_id').val() || null,
                 _token:                  '{{ csrf_token() }}'
             };
 
