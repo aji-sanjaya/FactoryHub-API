@@ -104,6 +104,24 @@ class ApInvoiceController extends Controller
 
         $roleId = Session::get('idempiere_role');
         $clientId = Session::get('idempiere_client');
+        $tenantName = config('idempiere.tenant.name');
+
+        $userData = Session::get('user_data');
+        $clientName = null;
+        if (is_array($userData)) {
+            $clientName = trim((string) ($userData['client_name'] ?? '')) ?: null;
+        } elseif (is_object($userData)) {
+            $clientName = trim((string) ($userData->client_name ?? '')) ?: null;
+        }
+
+        if (!$clientName && $clientId) {
+            $clientName = DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $clientId)
+                ->value('name');
+        }
+
+        $clientName = $clientName ?: $tenantName;
 
         // Organizations
         $organizations = DB::connection('idempiere')->select("
@@ -171,6 +189,30 @@ class ApInvoiceController extends Controller
             FROM c_project
             WHERE ad_client_id = ? AND isactive='Y' AND issummary='N'
             ORDER BY value
+        ", [$clientId]);
+
+        // Users (for Checked By & Approved By)
+        $users = DB::connection('idempiere')->select("
+            SELECT ad_user_id AS id, name AS text
+            FROM ad_user
+            WHERE isactive = 'Y' AND ad_client_id = ?
+            ORDER BY name
+        ", [$clientId]);
+
+        // Departments
+        $departments = DB::connection('idempiere')->select("
+            SELECT c_department_id AS id, name AS text
+            FROM c_department
+            WHERE isactive = 'Y' AND ad_client_id = ?
+            ORDER BY name
+        ", [$clientId]);
+
+        // Cost Centers
+        $costCenters = DB::connection('idempiere')->select("
+            SELECT c_costcenter_id AS id, name AS text
+            FROM c_costcenter
+            WHERE isactive = 'Y' AND ad_client_id = ?
+            ORDER BY name
         ", [$clientId]);
 
         // Invoice Lines
@@ -271,6 +313,8 @@ class ApInvoiceController extends Controller
             'title' => $docId === 'new' ? 'Create AP Invoice' : 'Edit AP Invoice',
             'invoice' => $invoice,
             'lines' => $lines,
+            'tenantName' => $tenantName,
+            'clientName' => $clientName,
             'organizations' => $organizations,
             'vendors' => $vendors,
             'vendorContacts' => $vendorContacts,
@@ -306,6 +350,11 @@ class ApInvoiceController extends Controller
             'withholdingTotal' => $invoice ? ($invoice->withholdingamount ?? 0) : 0,
             'apInvoiceConfig' => $apInvoiceConfig,
         ];
+
+        // Tambahkan ke viewData agar tersedia di view
+        $viewData['users'] = $users;
+        $viewData['departments'] = $departments;
+        $viewData['costCenters'] = $costCenters;
 
         if (request()->ajax() && request()->has('ajax_tab')) {
             $tab = request()->get('ajax_tab');
@@ -389,6 +438,10 @@ class ApInvoiceController extends Controller
             'c_project_id' => 'nullable',
             'c_tax_id' => 'required',
             'ad_user_id' => 'required',
+            'adw_ad_user_approved_id' => 'nullable|integer',
+            'adw_ad_user_verification_id' => 'nullable|integer',
+            'c_department_id' => 'nullable|integer',
+            'c_costcenter_id' => 'nullable|integer',
         ]);
 
         $userData = Session::get('user_data');
@@ -443,7 +496,7 @@ class ApInvoiceController extends Controller
             'C_DocTypeTarget_ID' => (int) $validated['doc_type_id'],
             'C_DocType_ID' => (int) $validated['doc_type_id'],
             'DateInvoiced' => $validated['invoice_date'],
-            'DueDate' => $validated['due_date'],
+            // 'DueDate' => $validated['due_date'],
             'DateAcct' => $validated['date_acct'] ?? $validated['invoice_date'],
             'IsSOTrx' => $apInvoiceConfig['defaults']['is_so_trx'],
             'C_BPartner_ID' => $bpartnerId,
@@ -472,6 +525,22 @@ class ApInvoiceController extends Controller
 
         if (!empty($validated['ad_user_id'])) {
             $payload['AD_User_ID'] = (int) $validated['ad_user_id'];
+        }
+
+        if (!empty($validated['adw_ad_user_approved_id'])) {
+            $payload['ADW_AD_User_Approved_ID'] = (int) $validated['adw_ad_user_approved_id'];
+        }
+
+        if (!empty($validated['adw_ad_user_verification_id'])) {
+            $payload['ADW_AD_User_Verification_ID'] = (int) $validated['adw_ad_user_verification_id'];
+        }
+
+        if (!empty($validated['c_department_id'])) {
+            $payload['C_Department_ID'] = (int) $validated['c_department_id'];
+        }
+
+        if (!empty($validated['c_costcenter_id'])) {
+            $payload['C_CostCenter_ID'] = (int) $validated['c_costcenter_id'];
         }
 
         Log::info('AP Invoice Create Payload:', $payload);
@@ -515,7 +584,12 @@ class ApInvoiceController extends Controller
             'po_reference' => 'nullable|string',
             'description' => 'nullable|string',
             'c_project_id' => 'nullable',
+            'c_tax_id' => 'nullable|integer',
             'ad_user_id' => 'nullable|integer',
+            'adw_ad_user_approved_id' => 'nullable|integer',
+            'adw_ad_user_verification_id' => 'nullable|integer',
+            'c_department_id' => 'nullable|integer',
+            'c_costcenter_id' => 'nullable|integer',
         ]);
 
         $payload = [];
@@ -525,7 +599,7 @@ class ApInvoiceController extends Controller
             $payload['C_BPartner_ID'] = (int) $validated['c_bpartner_id'];
         if (!empty($validated['invoice_date']))
             $payload['DateInvoiced'] = $validated['invoice_date'];
-        if (!empty($validated['due_date']))            
+        if (!empty($validated['due_date']))
             $payload['DueDate'] = $validated['due_date'];
         if (!empty($validated['date_acct']))
             $payload['DateAcct'] = $validated['date_acct'];
@@ -545,6 +619,14 @@ class ApInvoiceController extends Controller
             $payload['C_Tax_ID'] = (int) $validated['c_tax_id'];
         if (!empty($validated['ad_user_id']))
             $payload['AD_User_ID'] = (int) $validated['ad_user_id'];
+        if (array_key_exists('adw_ad_user_approved_id', $validated))
+            $payload['ADW_AD_User_Approved_ID'] = $validated['adw_ad_user_approved_id'] ? (int) $validated['adw_ad_user_approved_id'] : null;
+        if (array_key_exists('adw_ad_user_verification_id', $validated))
+            $payload['ADW_AD_User_Verification_ID'] = $validated['adw_ad_user_verification_id'] ? (int) $validated['adw_ad_user_verification_id'] : null;
+        if (array_key_exists('c_department_id', $validated))
+            $payload['C_Department_ID'] = $validated['c_department_id'] ? (int) $validated['c_department_id'] : null;
+        if (array_key_exists('c_costcenter_id', $validated))
+            $payload['C_CostCenter_ID'] = $validated['c_costcenter_id'] ? (int) $validated['c_costcenter_id'] : null;
 
         try {
             $response = $this->idempiereService->put("models/c_invoice/{$id}", $payload);
@@ -571,7 +653,7 @@ class ApInvoiceController extends Controller
             'c_orderline_id' => 'nullable|numeric',
             'm_inoutline_id' => 'nullable|numeric',
             'c_tax_id' => 'nullable|integer',
-            'is_withholding'   => 'nullable',
+            'is_withholding' => 'nullable',
             'withholding_rate' => 'nullable|numeric|min:0',
         ]);
 
@@ -583,7 +665,7 @@ class ApInvoiceController extends Controller
                 ->table('c_invoice')
                 ->where('c_invoice_id', $invoiceId)
                 ->select('ad_org_id', 'c_currency_id', 'c_doctype_id', 'c_tax_id')
-                ->first(); 
+                ->first();
 
             if (!$invoice) {
                 return response()->json(['message' => 'Invoice not found.'], 404);
@@ -597,7 +679,7 @@ class ApInvoiceController extends Controller
                     ->where('c_tax_id', $resolvedTaxId)
                     ->value('rate') ?? 0);
             }
-                
+
             $qty = (float) $validated['qty'];
             $unitPrice = (float) $validated['unit_price'];
             $netAmt = round($qty * $unitPrice, 2);
@@ -605,9 +687,9 @@ class ApInvoiceController extends Controller
             $lineTotalAmt = round($netAmt + $taxAmt, 2);
 
             // Withholding Tax (PPh23)
-            $isWithholding   = $request->boolean('is_withholding');
+            $isWithholding = $request->boolean('is_withholding');
             $withholdingRate = (float) ($validated['withholding_rate'] ?? 0);
-            $withholdingAmt  = $isWithholding ? round($netAmt * $withholdingRate / 100, 2) : 0;
+            $withholdingAmt = $isWithholding ? round($netAmt * $withholdingRate / 100, 2) : 0;
 
             // Get UOM from product if not provided
             $uomId = DB::connection('idempiere')
@@ -626,8 +708,8 @@ class ApInvoiceController extends Controller
                     'TaxAmt' => $taxAmt,
                     'LineTotalAmt' => $lineTotalAmt,
                     'Description' => $validated['description'] ?? null,
-                    'IsWithholding'     => $isWithholding ? 'Y' : 'N',
-                    'WithholdingRate'   => $withholdingRate,
+                    'IsWithholding' => $isWithholding ? 'Y' : 'N',
+                    'WithholdingRate' => $withholdingRate,
                     'WithholdingAmount' => $withholdingAmt,
                 ];
                 if ($uomId)
@@ -652,8 +734,8 @@ class ApInvoiceController extends Controller
                     'TaxAmt' => $taxAmt,
                     'LineTotalAmt' => $lineTotalAmt,
                     'Description' => $validated['description'] ?? null,
-                    'IsWithholding'     => $isWithholding ? 'Y' : 'N',
-                    'WithholdingRate'   => $withholdingRate,
+                    'IsWithholding' => $isWithholding ? 'Y' : 'N',
+                    'WithholdingRate' => $withholdingRate,
                     'WithholdingAmount' => $withholdingAmt,
                 ];
                 if ($invoice)
@@ -691,12 +773,12 @@ class ApInvoiceController extends Controller
                     ->first();
 
                 return response()->json([
-                    'message'          => "Line {$action} successfully",
-                    'total_lines'      => number_format($updatedInvoice->totallines ?? 0, 2),
-                    'grandtotal'       => number_format($updatedInvoice->grandtotal ?? 0, 2),
-                    'tax_amount'       => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->totallines ?? 0), 2),
-                    'withholding_total'=> number_format($updatedInvoice->withholdingamount ?? 0, 2),
-                    'grand_total_net'  => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->withholdingamount ?? 0), 2),
+                    'message' => "Line {$action} successfully",
+                    'total_lines' => number_format($updatedInvoice->totallines ?? 0, 2),
+                    'grandtotal' => number_format($updatedInvoice->grandtotal ?? 0, 2),
+                    'tax_amount' => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->totallines ?? 0), 2),
+                    'withholding_total' => number_format($updatedInvoice->withholdingamount ?? 0, 2),
+                    'grand_total_net' => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->withholdingamount ?? 0), 2),
                 ]);
             } else {
                 Log::error("AP Invoice Line Error ({$action}): " . $response->body());
@@ -712,7 +794,7 @@ class ApInvoiceController extends Controller
     public function destroyLine(Request $request)
     {
         $validated = $request->validate([
-            'line_ids'    => 'required|array',
+            'line_ids' => 'required|array',
             'document_id' => 'required',
         ]);
 
@@ -750,12 +832,12 @@ class ApInvoiceController extends Controller
                 ->first();
 
             return response()->json([
-                'message'          => 'Line(s) deleted successfully',
-                'total_lines'      => number_format($updatedInvoice->totallines ?? 0, 2),
-                'grandtotal'       => number_format($updatedInvoice->grandtotal ?? 0, 2),
-                'tax_amount'       => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->totallines ?? 0), 2),
-                'withholding_total'=> number_format($updatedInvoice->withholdingamount ?? 0, 2),
-                'grand_total_net'  => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->withholdingamount ?? 0), 2),
+                'message' => 'Line(s) deleted successfully',
+                'total_lines' => number_format($updatedInvoice->totallines ?? 0, 2),
+                'grandtotal' => number_format($updatedInvoice->grandtotal ?? 0, 2),
+                'tax_amount' => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->totallines ?? 0), 2),
+                'withholding_total' => number_format($updatedInvoice->withholdingamount ?? 0, 2),
+                'grand_total_net' => number_format(($updatedInvoice->grandtotal ?? 0) - ($updatedInvoice->withholdingamount ?? 0), 2),
             ]);
 
         } catch (\Exception $e) {
@@ -785,6 +867,19 @@ class ApInvoiceController extends Controller
             $response = $this->idempiereService->put("models/c_invoice/{$invoiceId}", $payload);
 
             if ($response->successful()) {
+                if ($validated['doc_action'] === 'CO') {
+                    // Manual DB update to ensure custom columns are cleared
+                    DB::connection('idempiere')
+                        ->table('c_invoice')
+                        ->where('c_invoice_id', $invoiceId)
+                        ->update([
+                            'adw_checked_date' => null,
+                            'adw_approved_date' => null,
+                            'adw_checked_isapproved' => null,
+                            'adw_approve_isapproved' => null,
+                        ]);
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Document processed successfully',
@@ -1217,7 +1312,7 @@ class ApInvoiceController extends Controller
     public function getVendorContacts(Request $request)
     {
         $vendorId = $request->get('vendor_id');
-        
+
         if (!$vendorId) {
             return response()->json([
                 'results' => [],
@@ -1293,7 +1388,7 @@ class ApInvoiceController extends Controller
                     ->table('c_bpartner as bp')
                     ->leftJoin('c_bpartner_location as bpl', function ($join) {
                         $join->on('bp.c_bpartner_id', '=', 'bpl.c_bpartner_id')
-                             ->where('bpl.isactive', '=', 'Y');
+                            ->where('bpl.isactive', '=', 'Y');
                     })
                     ->leftJoin('c_location as locbp', 'bpl.c_location_id', '=', 'locbp.c_location_id')
                     ->where('bp.c_bpartner_id', config('idempiere.client_id'))
@@ -1336,21 +1431,25 @@ class ApInvoiceController extends Controller
 
             // Checked By (Verification) — status logic
             $checkedQr = null;
-            $checkedDate = 'Pending';
+            $checkedDate = 'Pending'; // Default when not yet actioned
             if ($checkedBy) {
-                if ($invoice->docstatus === 'CO' || $invoice->docstatus === 'CL') {
-                    $checkedDate = date('d M Y H:i', strtotime($invoice->updated));
-                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $invoice->updated);
+                if ($invoice->adw_checked_isapproved == 'AP' && $invoice->adw_checked_date) {
+                    $checkedDate = date('d M Y H:i', strtotime($invoice->adw_checked_date));
+                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $invoice->adw_checked_date);
+                } elseif ($invoice->adw_checked_isapproved == 'RE') {
+                    $checkedDate = 'Rejected';
                 }
             }
 
             // Approved By — status logic
             $approvedQr = null;
-            $approvedDate = 'Pending';
+            $approvedDate = 'Pending'; // Default when not yet actioned
             if ($approvedBy) {
-                if ($invoice->docstatus === 'CO' || $invoice->docstatus === 'CL') {
-                    $approvedDate = date('d M Y H:i', strtotime($invoice->updated));
-                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $invoice->updated);
+                if ($invoice->adw_approve_isapproved == 'AP' && $invoice->adw_approved_date) {
+                    $approvedDate = date('d M Y H:i', strtotime($invoice->adw_approved_date));
+                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $invoice->adw_approved_date);
+                } elseif ($invoice->adw_approve_isapproved == 'RE') {
+                    $approvedDate = 'Rejected';
                 }
             }
 

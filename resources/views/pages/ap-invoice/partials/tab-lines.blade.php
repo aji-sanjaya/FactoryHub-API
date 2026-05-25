@@ -103,14 +103,6 @@
                         <th
                             class="min-w-[140px] px-6 py-4 font-medium text-right text-gray-500 text-theme-sm dark:text-gray-400">
                             Net Amount</th>
-                        <th class="min-w-[80px] px-4 py-3 font-medium text-center text-gray-500 text-theme-sm dark:text-gray-400">
-                            Is WHT</th>
-                        <th
-                            class="min-w-[100px] px-6 py-4 font-medium text-right text-gray-500 text-theme-sm dark:text-gray-400">
-                            WHT Rate</th>
-                        <th
-                            class="min-w-[130px] px-6 py-4 font-medium text-right text-gray-500 text-theme-sm dark:text-gray-400">
-                            WHT Amount</th>
                         <th class="min-w-[140px] px-6 py-4 font-medium text-gray-500 text-theme-sm dark:text-gray-400">
                             GR Ref</th>
                         @if($canEdit)
@@ -159,27 +151,6 @@
                             <td
                                 class="px-6 py-4 whitespace-nowrap text-theme-xs text-right font-bold text-gray-900 dark:text-white font-mono bg-brand-50/10 dark:bg-brand-900/10">
                                 {{ number_format($line->net_amount, 2) }}
-                            </td>
-                            <td class="px-4 py-4 whitespace-nowrap text-center">
-                                @if(($line->is_withholding ?? 'N') === 'Y')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Yes</span>
-                                @else
-                                    <span class="text-gray-400 text-theme-xs">-</span>
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-theme-xs text-right text-gray-600 dark:text-gray-400 font-mono">
-                                @if(($line->is_withholding ?? 'N') === 'Y')
-                                    {{ number_format($line->withholding_rate ?? 0, 2) }}%
-                                @else
-                                    -
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-theme-xs text-right font-medium text-orange-600 dark:text-orange-400 font-mono">
-                                @if(($line->is_withholding ?? 'N') === 'Y')
-                                    ({{ number_format($line->withholding_amount ?? 0, 2) }})
-                                @else
-                                    -
-                                @endif
                             </td>
                             <td
                                 class="px-6 py-4 whitespace-nowrap text-theme-xs text-gray-500 dark:text-gray-400 font-mono">
@@ -447,7 +418,8 @@
                             </label>
                             <div class="relative">
                                 <input type="text" id="line_qty" name="qty" required
-                                    onkeypress="return /[0-9.]/.test(event.key)" onblur="formatNumber(this); recalcWithholding()"
+                                    onkeypress="return /[0-9.]/.test(event.key)"
+                                    onblur="formatNumber(this); recalcWithholding()"
                                     class="block w-full rounded-lg border-gray-300 pl-4 pr-16 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white sm:text-sm h-11 shadow-sm"
                                     placeholder="0.00">
                                 <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
@@ -483,12 +455,14 @@
                     </div>
 
                     {{-- Withholding Tax (PPh23) --}}
-                    <div class="border border-orange-100 dark:border-orange-900/40 rounded-lg p-4 space-y-4 bg-orange-50/40 dark:bg-orange-900/10">
+                    <div
+                        class="border border-orange-100 dark:border-orange-900/40 rounded-lg p-4 space-y-4 bg-orange-50/40 dark:bg-orange-900/10">
                         <div class="flex items-center gap-3">
                             <input type="checkbox" id="is_withholding" name="is_withholding" value="1"
                                 onchange="onWithholdingToggle(this.checked)"
                                 class="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-400 cursor-pointer">
-                            <label for="is_withholding" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <label for="is_withholding"
+                                class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
                                 Is Withholding Tax
                                 <span class="ml-1 text-xs font-normal text-orange-500">(PPh23)</span>
                             </label>
@@ -496,13 +470,13 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {{-- Withholding Rate --}}
                             <div>
-                                <label for="withholding_rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label for="withholding_rate"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     Withholding Rate (%)
                                 </label>
                                 <div class="relative">
-                                    <input type="number" id="withholding_rate" name="withholding_rate"
-                                        value="2" min="0" step="0.01" disabled
-                                        oninput="recalcWithholding()"
+                                    <input type="number" id="withholding_rate" name="withholding_rate" value="2" min="0"
+                                        step="0.01" disabled oninput="recalcWithholding()"
                                         class="w-full rounded-lg border-gray-300 shadow-sm focus:border-orange-400 focus:ring-orange-400 dark:bg-gray-700 dark:border-gray-700 dark:text-white sm:text-sm pr-8 h-11 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400 dark:disabled:bg-gray-800 transition-colors">
                                     <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                                         <span class="text-gray-400 text-sm">%</span>
@@ -511,7 +485,8 @@
                             </div>
                             {{-- Withholding Amount --}}
                             <div>
-                                <label for="withholding_amount_display" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label for="withholding_amount_display"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     Withholding Amount
                                     <span class="text-xs text-gray-400 font-normal ml-1">(auto)</span>
                                 </label>
@@ -822,10 +797,10 @@
             function updateHeaderTotals(data) {
                 if (!data) return;
                 const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
-                set('txt_total_lines',      data.total_lines);
-                set('txt_tax_amount',       data.tax_amount);
-                set('txt_withholding_total',data.withholding_total);
-                set('txt_grand_total',      data.grand_total_net);
+                set('txt_total_lines', data.total_lines);
+                set('txt_tax_amount', data.tax_amount);
+                set('txt_withholding_total', data.withholding_total);
+                set('txt_grand_total', data.grand_total_net);
             }
 
             window.onWithholdingToggle = function (checked) {

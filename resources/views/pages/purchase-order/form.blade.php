@@ -161,6 +161,14 @@
                         </svg>
                         Attachments
                     </a>
+                    <a href="#" onclick="switchTab('price-history'); return false;" id="nav-price-history"
+                        class="{{ $activeTab == 'price-history' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors {{ $isNew ? 'cursor-not-allowed opacity-50 pointer-events-none' : '' }}">
+                        <svg class="w-4 h-4 {{ $activeTab == 'price-history' ? 'text-brand-500' : 'text-gray-400 group-hover:text-gray-500' }}"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.5 8H4m0-2v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-5.032a1 1 0 0 1-.768-.36l-1.9-2.28a1 1 0 0 0-.768-.36H5a1 1 0 0 0-1 1Z"></path>
+                        </svg> 
+                        Price History
+                    </a>
                 </nav>
             </div>
 
@@ -180,6 +188,38 @@
                 <div id="tab-attachments" class="{{ $activeTab == 'attachments' ? 'block' : 'hidden' }}">
                     <!-- Content gathered via AJAX -->
                 </div>
+
+                <!-- Price History Content -->
+                @if(!$isNew)
+                    <div id="tab-price-history" class="{{ $activeTab == 'price-history' ? 'block' : 'hidden' }} p-6"
+                         data-price-history-url="{{ route('purchase-order.price-history', \Illuminate\Support\Facades\Crypt::encryptString($order->c_order_id)) }}">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Price History Report</h3>
+                            <button type="button" onclick="reloadPriceHistory()"
+                               class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 shadow-sm transition-all gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Reload Data
+                            </button>
+                        </div>
+                        <div class="w-full relative bg-gray-100 dark:bg-gray-900 rounded-2xl overflow-hidden shadow-inner border border-gray-200 dark:border-gray-800" style="height: 75vh;">
+                            <!-- Loading overlay: visible until iframe finishes loading -->
+                            <div id="price-history-loading" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
+                                <div class="rounded-full bg-brand-50 dark:bg-brand-900/30 p-4 mb-4">
+                                    <svg class="animate-spin h-8 w-8 text-brand-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                                <span class="text-gray-500 font-medium dark:text-gray-400 text-sm">Loading Price History...</span>
+                            </div>
+                            <!-- Iframe: src injected lazily on first tab click -->
+                            <iframe id="price-history-iframe" src="" class="absolute inset-0 w-full h-full border-0 opacity-0 transition-opacity duration-300"
+                                onload="document.getElementById('price-history-loading').style.display='none'; this.classList.remove('opacity-0');"></iframe>
+                        </div>
+                    </div>
+                @endif
             </div>
 
         </div>
@@ -531,7 +571,7 @@
                 const initialTab = '{{ $activeTab }}';
                 const isNew = {{ $isNew ? 'true' : 'false' }};
 
-                if (!isNew && initialTab !== 'header') {
+                if (!isNew && initialTab !== 'header' && initialTab !== 'price-history') {
                     // Force load content for the active tab (especially for attachments which is AJAX only)
                     loadTabContent(initialTab);
                     window.activeTab = initialTab;
@@ -540,7 +580,7 @@
 
             function switchTab(tabName) {
                 // Valid tabs
-                const tabs = ['header', 'lines', 'attachments'];
+                const tabs = ['header', 'lines', 'attachments', 'price-history'];
                 if (!tabs.includes(tabName)) return;
 
                 // Check if already active
@@ -582,11 +622,28 @@
 
                 // Load content for non-header tabs if not new
                 const isNew = {{ $isNew ? 'true' : 'false' }};
-                if (!isNew && tabName !== 'header') {
+                if (!isNew && tabName !== 'header' && tabName !== 'price-history') {
                     // Determine if we should load (simple check or always load)
                     // The previous logic always loaded 'lines' on switch.
                     // We'll keep it for 'lines' and 'attachments'.
                     loadTabContent(tabName);
+                }
+
+                // Lazy-load Price History iframe only on first click
+                if (!isNew && tabName === 'price-history') {
+                    const iframe = document.getElementById('price-history-iframe');
+                    const loadingOverlay = document.getElementById('price-history-loading');
+                    if (iframe && !iframe.getAttribute('src')) {
+                        // Reset loading state
+                        if (loadingOverlay) {
+                            loadingOverlay.style.display = 'flex';
+                        }
+                        iframe.classList.add('opacity-0');
+                        // Inject URL from data attribute (set by Blade)
+                        const tabEl = document.getElementById('tab-price-history');
+                        const url = tabEl ? tabEl.getAttribute('data-price-history-url') : '';
+                        if (url) iframe.setAttribute('src', url);
+                    }
                 }
 
                 // Update global activeTab var for other scripts
@@ -596,6 +653,24 @@
                 const visibleUrl = new URL(window.location.href);
                 visibleUrl.searchParams.set('tab', tabName);
                 window.history.replaceState(null, '', visibleUrl.toString());
+            }
+
+            function reloadPriceHistory() {
+                const iframe = document.getElementById('price-history-iframe');
+                const loadingOverlay = document.getElementById('price-history-loading');
+                const tabEl = document.getElementById('tab-price-history');
+                if (!iframe || !tabEl) return;
+
+                // Show loading overlay & hide iframe
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'flex';
+                }
+                iframe.classList.add('opacity-0');
+
+                // Append cache-buster to force fresh data
+                const baseUrl = tabEl.getAttribute('data-price-history-url');
+                const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+                iframe.setAttribute('src', url);
             }
 
             function loadTabContent(tabName, params = {}) {

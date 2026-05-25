@@ -184,6 +184,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/create-po/new', [\App\Http\Controllers\PurchaseOrderController::class, 'create'])->name('purchase-order.create');
     Route::post('/create-po/store', [\App\Http\Controllers\PurchaseOrderController::class, 'store'])->name('purchase-order.store');
     Route::get('/create-po/print/{id}', [\App\Http\Controllers\PurchaseOrderController::class, 'print'])->name('purchase-order.print');
+    Route::get('/create-po/price-history/{id}', [\App\Http\Controllers\PurchaseOrderController::class, 'priceHistory'])->name('purchase-order.price-history');
     Route::put('/create-po/update/{id}', [\App\Http\Controllers\PurchaseOrderController::class, 'update'])->name('purchase-order.update');
 
     // PO API Routes

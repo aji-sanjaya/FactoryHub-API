@@ -8,10 +8,12 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Idempiere\COrder;
 use App\Models\Idempiere\COrderLine;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 
 class PurchaseOrderController extends Controller
 {
@@ -1380,6 +1382,265 @@ class PurchaseOrderController extends Controller
         } catch (\Exception $e) {
             Log::error('Print Error: ' . $e->getMessage());
             abort(500, 'Error generating PDF');
+        }
+    }
+
+    public function priceHistory($id)
+    {
+        try {
+            $decryptedId = Crypt::decryptString($id);
+            $order = COrder::find($decryptedId);
+
+            if (!$order) {
+                abort(404);
+            }
+
+            $poDate = Carbon::parse($order->dateordered);
+            
+            // Calculate the 3-month range: month of PO and 2 preceding months
+            $m1 = $poDate->copy()->subMonths(2);
+            $m2 = $poDate->copy()->subMonths(1);
+            $m3 = $poDate;
+
+            $startDateTime = $m1->copy()->startOfMonth()->toDateTimeString();
+            $endDateTime = $m3->copy()->endOfMonth()->toDateTimeString();
+
+            // Month ranges for bucket classification
+            $m1Start = $m1->copy()->startOfMonth();
+            $m1End   = $m1->copy()->endOfMonth();
+            $m2Start = $m2->copy()->startOfMonth();
+            $m2End   = $m2->copy()->endOfMonth();
+            $m3Start = $m3->copy()->startOfMonth();
+            $m3End   = $m3->copy()->endOfMonth();
+
+            // Fetch products in this PO
+            $products = DB::connection('idempiere')
+                ->table('c_orderline as ol')
+                ->join('m_product as p', 'ol.m_product_id', '=', 'p.m_product_id')
+                ->where('ol.c_order_id', $decryptedId)
+                ->select('p.m_product_id', 'p.value as product_value', 'p.name as product_name')
+                ->distinct()
+                ->orderBy('p.value')
+                ->get();
+
+            $reportData = [];
+
+            foreach ($products as $product) {
+                // 1. Qty Finish Good
+                $qtyFinishGood = DB::connection('idempiere')
+                    ->table('m_storageonhand as soh')
+                    ->join('m_locator as l', 'l.m_locator_id', '=', 'soh.m_locator_id')
+                    ->where('l.m_warehouse_id', 1000000)
+                    ->where('soh.m_product_id', $product->m_product_id)
+                    ->sum('soh.qtyonhand') ?? 0;
+
+                // 2. Query PO lines for this product in 3 months
+                $poLines = DB::connection('idempiere')
+                    ->table('c_orderline as ol')
+                    ->join('c_order as o', 'o.c_order_id', '=', 'ol.c_order_id')
+                    ->join('c_bpartner as bp', 'bp.c_bpartner_id', '=', 'o.c_bpartner_id')
+                    ->leftJoin('c_paymentterm as pt', 'pt.c_paymentterm_id', '=', 'o.c_paymentterm_id')
+                    ->where('ol.m_product_id', $product->m_product_id)
+                    ->where('o.issotrx', 'N')
+                    ->whereNotIn('o.docstatus', ['VO', 'RE'])
+                    ->whereBetween('o.dateordered', [$startDateTime, $endDateTime])
+                    ->select(
+                        'o.dateordered',
+                        'o.c_bpartner_id',
+                        'bp.name as vendor_name',
+                        'ol.qtyentered',
+                        'ol.priceentered',
+                        'pt.netdays',
+                        'ol.c_orderline_id'
+                    )
+                    ->get();
+
+                // 3. Receipt Quantities
+                $poLineIds = $poLines->pluck('c_orderline_id')->toArray();
+                $receiptQtyMap = [];
+                if (!empty($poLineIds)) {
+                    $receiptQtyMap = DB::connection('idempiere')
+                        ->table('m_inoutline as iol')
+                        ->join('m_inout as io', 'io.m_inout_id', '=', 'iol.m_inout_id')
+                        ->whereIn('iol.c_orderline_id', $poLineIds)
+                        ->whereNotIn('io.docstatus', ['VO', 'RE'])
+                        ->select('iol.c_orderline_id', DB::raw('SUM(iol.movementqty) as total_received'))
+                        ->groupBy('iol.c_orderline_id')
+                        ->get()
+                        ->pluck('total_received', 'c_orderline_id')
+                        ->toArray();
+                }
+
+                // 4. Group by Vendor and Month bucket
+                $vendorData = [];
+
+                foreach ($poLines as $line) {
+                    $vendorId = $line->c_bpartner_id;
+                    if (!isset($vendorData[$vendorId])) {
+                        $vendorData[$vendorId] = [
+                            'vendor_name' => $line->vendor_name,
+                            'buckets' => [
+                                1 => ['prices' => [], 'qty_po' => 0, 'qty_rr' => 0, 'top' => []],
+                                2 => ['prices' => [], 'qty_po' => 0, 'qty_rr' => 0, 'top' => []],
+                                3 => ['prices' => [], 'qty_po' => 0, 'qty_rr' => 0, 'top' => []],
+                            ]
+                        ];
+                    }
+
+                    $orderDate = Carbon::parse($line->dateordered);
+                    $bucket = null;
+                    if ($orderDate->between($m1Start, $m1End)) {
+                        $bucket = 1;
+                    } elseif ($orderDate->between($m2Start, $m2End)) {
+                        $bucket = 2;
+                    } elseif ($orderDate->between($m3Start, $m3End)) {
+                        $bucket = 3;
+                    }
+
+                    if ($bucket) {
+                        $vendorData[$vendorId]['buckets'][$bucket]['prices'][] = (float) $line->priceentered;
+                        $vendorData[$vendorId]['buckets'][$bucket]['qty_po'] += (float) $line->qtyentered;
+                        $vendorData[$vendorId]['buckets'][$bucket]['qty_rr'] += (float) ($receiptQtyMap[$line->c_orderline_id] ?? 0);
+                        if ($line->netdays !== null) {
+                            $vendorData[$vendorId]['buckets'][$bucket]['top'][] = (int) $line->netdays;
+                        }
+                    }
+                }
+
+                // Compute averages and check non-empty states
+                $processedVendors = [];
+                foreach ($vendorData as $vendorId => $vInfo) {
+                    $buckets = [];
+                    $hasAnyData = false;
+                    
+                    // Month Averages arrays for row Average calculation
+                    $rowPrices = [];
+                    $rowQtyPOs = [];
+                    $rowQtyRRs = [];
+                    $rowTOPs = [];
+
+                    for ($b = 1; $b <= 3; $b++) {
+                        $bData = $vInfo['buckets'][$b];
+                        if (!empty($bData['prices'])) {
+                            $hasAnyData = true;
+                            $avgPrice = array_sum($bData['prices']) / count($bData['prices']);
+                            $avgTop = !empty($bData['top']) ? array_sum($bData['top']) / count($bData['top']) : null;
+                            
+                            $buckets[$b] = [
+                                'price' => $avgPrice,
+                                'qty_po' => $bData['qty_po'],
+                                'qty_rr' => $bData['qty_rr'],
+                                'top' => $avgTop,
+                                'empty' => false
+                            ];
+
+                            $rowPrices[] = $avgPrice;
+                            $rowQtyPOs[] = $bData['qty_po'];
+                            $rowQtyRRs[] = $bData['qty_rr'];
+                            if ($avgTop !== null) {
+                                $rowTOPs[] = $avgTop;
+                            }
+                        } else {
+                            $buckets[$b] = [
+                                'price' => null,
+                                'qty_po' => null,
+                                'qty_rr' => null,
+                                'top' => null,
+                                'empty' => true
+                            ];
+                        }
+                    }
+
+                    if ($hasAnyData) {
+                        $processedVendors[$vendorId] = [
+                            'vendor_name' => $vInfo['vendor_name'],
+                            'buckets' => $buckets,
+                            'row_average' => [
+                                'price' => !empty($rowPrices) ? array_sum($rowPrices) / count($rowPrices) : null,
+                                'qty_po' => !empty($rowQtyPOs) ? array_sum($rowQtyPOs) / count($rowQtyPOs) : null,
+                                'qty_rr' => !empty($rowQtyRRs) ? array_sum($rowQtyRRs) / count($rowQtyRRs) : null,
+                                'top' => !empty($rowTOPs) ? array_sum($rowTOPs) / count($rowTOPs) : null,
+                            ]
+                        ];
+                    }
+                }
+
+                // Compute Month-wise Averages (Price IDR Average footer)
+                $monthAverages = [
+                    1 => null,
+                    2 => null,
+                    3 => null,
+                    'grand_average' => null
+                ];
+
+                $allPrices = [];
+                for ($b = 1; $b <= 3; $b++) {
+                    $bPrices = [];
+                    foreach ($processedVendors as $vId => $vData) {
+                        if (!$vData['buckets'][$b]['empty']) {
+                            $bPrices[] = $vData['buckets'][$b]['price'];
+                            $allPrices[] = $vData['buckets'][$b]['price'];
+                        }
+                    }
+                    if (!empty($bPrices)) {
+                        $monthAverages[$b] = array_sum($bPrices) / count($bPrices);
+                    }
+                }
+                if (!empty($allPrices)) {
+                    $monthAverages['grand_average'] = array_sum($allPrices) / count($allPrices);
+                }
+
+                $reportData[] = [
+                    'product_id' => $product->m_product_id,
+                    'product_value' => $product->product_value,
+                    'product_name' => $product->product_name,
+                    'qty_finish_good' => $qtyFinishGood,
+                    'vendors' => $processedVendors,
+                    'month_averages' => $monthAverages
+                ];
+            }
+
+            // Client Name & User Name
+            $clientName = \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $order->ad_client_id)
+                ->value('name') ?? '';
+
+            $userData = Session::get('user_data');
+            $userId = is_array($userData) ? ($userData['userId'] ?? $userData['id'] ?? $userData['ad_user_id'] ?? null) : ($userData->userId ?? $userData->id ?? $userData->ad_user_id ?? null);
+            $printedBy = 'ADempiere';
+            if ($userId) {
+                $printedBy = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('ad_user')
+                    ->where('ad_user_id', $userId)
+                    ->value('name') ?? 'ADempiere';
+            }
+
+            $pdf = Pdf::loadView('pages.purchase-order.price-history-pdf', [
+                'order' => $order,
+                'clientName' => $clientName,
+                'printedBy' => $printedBy,
+                'm1Name' => $m1->format('M'),
+                'm2Name' => $m2->format('M'),
+                'm3Name' => $m3->format('M'),
+                'y1' => $m1->format('Y'),
+                'y2' => $m2->format('Y'),
+                'y3' => $m3->format('Y'),
+                'reportData' => $reportData,
+                'printedDate' => Carbon::now()->format('D, d-M-Y H:i:s A'),
+            ])->setOptions(['isRemoteEnabled' => true]);
+
+            $filename = 'PriceHistory-' . str_replace(['/', '\\'], '-', $order->documentno) . '.pdf';
+
+            if (request()->has('download')) {
+                return $pdf->download($filename);
+            }
+
+            return $pdf->stream($filename);
+
+        } catch (\Exception $e) {
+            Log::error('Price History PDF Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            abort(500, 'Error generating PDF: ' . $e->getMessage());
         }
     }
 

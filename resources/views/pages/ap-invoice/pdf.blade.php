@@ -449,7 +449,7 @@
                                     <div style="height: 65px;"></div>
                                 @endif
                                 <div class="sig-name">{{ $checkedBy ?? '..................' }}</div>
-                                <div class="sig-role" style="font-weight: bold;">FAT</div>
+                                <div class="sig-role" style="font-weight: bold;">Finance</div>
                                 <div style="font-size: 7pt; font-style: italic;">({{ $checkedDate ?? '' }})</div>
                             </td>
                             <td>

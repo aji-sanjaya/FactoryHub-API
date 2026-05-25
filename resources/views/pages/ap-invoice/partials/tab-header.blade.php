@@ -12,8 +12,7 @@
         $apInvoiceConfig = $apInvoiceConfig ?? config('idempiere.ap-invoice');
         $isNew = is_null($invoice);
         $isReadOnly = !$isNew && in_array($invoice->docstatus, $apInvoiceConfig['statuses']['read_only'] ?? [], true);
-        $docNo = $isNew ? '** New **' : $invoice->documentno;
-        $clientName = session('idempiere_client_name', 'Dharmamulia Prima Karya');
+        $docNo = $isNew ? '** New **' : $invoice->documentno; 
     @endphp
 
     {{-- ── Section 1: General Information ─────────────────────────────────── --}}
@@ -27,14 +26,13 @@
 
             {{-- Left Column --}}
             <div class="space-y-5">
-                {{-- Client --}}
+                <!-- Client -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
-                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Client <span class="text-red-500">*</span>
-                    </label>
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Client
+                        <span class="text-red-500">*</span></label>
                     <div class="col-span-1 sm:col-span-2">
-                        <input type="text" value="{{ $clientName }}" readonly
-                            class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300">
+                        <input type="text" value="{{ $clientName ?? $tenantName ?? '' }}" readonly
+                            class="w-full px-3.5 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600 cursor-not-allowed focus:ring-0 dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-300 transition-colors">
                     </div>
                 </div>
 
@@ -201,6 +199,87 @@
         </div>
     </div>
 
+    {{-- ── Section: Additional Information ──────────────────────────────── --}}
+    <div class="mb-8">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center mb-4">
+            <span class="w-1 h-6 bg-green-500 rounded mr-3"></span>
+            Additional Information
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6 bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            {{-- Checked By --}}
+            <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Checked By
+                </label>
+                <div class="col-span-1 sm:col-span-2">
+                    <select id="adw_ad_user_verification_id" name="adw_ad_user_verification_id" {{ $isReadOnly ? 'disabled' : '' }}
+                        class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                        <option value="">- Select User -</option>
+                        @foreach($users as $user)
+                            <option value="{{ $user->id }}" {{ (!$isNew && $invoice->adw_ad_user_verification_id == $user->id) ? 'selected' : '' }}>
+                                {{ $user->text }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            {{-- Approved By --}}
+            <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Approved By
+                </label>
+                <div class="col-span-1 sm:col-span-2">
+                    <select id="adw_ad_user_approved_id" name="adw_ad_user_approved_id" {{ $isReadOnly ? 'disabled' : '' }}
+                        class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                        <option value="">- Select User -</option>
+                        @foreach($users as $user)
+                            <option value="{{ $user->id }}" {{ (!$isNew && $invoice->adw_ad_user_approved_id == $user->id) ? 'selected' : '' }}>
+                                {{ $user->text }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            {{-- Department --}}
+            <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Department
+                </label>
+                <div class="col-span-1 sm:col-span-2">
+                    <select id="c_department_id" name="c_department_id" {{ $isReadOnly ? 'disabled' : '' }}
+                        class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                        <option value="">- Select Department -</option>
+                        @foreach($departments as $dept)
+                            <option value="{{ $dept->id }}" {{ (!$isNew && $invoice->c_department_id == $dept->id) ? 'selected' : '' }}>
+                                {{ $dept->text }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            {{-- Cost Center --}}
+            <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Cost Center
+                </label>
+                <div class="col-span-1 sm:col-span-2">
+                    <select id="c_costcenter_id" name="c_costcenter_id" {{ $isReadOnly ? 'disabled' : '' }}
+                        class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                        <option value="">- Select Cost Center -</option>
+                        @foreach($costCenters as $cc)
+                            <option value="{{ $cc->id }}" {{ (!$isNew && $invoice->c_costcenter_id == $cc->id) ? 'selected' : '' }}>
+                                {{ $cc->text }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- ── Section 2: Invoice Details ───────────────────────────────────────── --}}
     <div class="mb-6">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center mb-4">
@@ -318,7 +397,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
                         <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">
                             Total Other Tax
-                            <span class="block text-xs text-orange-500 font-normal">(PPh23)</span>
+                            <!-- <span class="block text-xs text-orange-500 font-normal">(PPh23)</span> -->
                         </label>
                         <div class="col-span-1 sm:col-span-2">
                             <input type="text" id="txt_withholding_total"
