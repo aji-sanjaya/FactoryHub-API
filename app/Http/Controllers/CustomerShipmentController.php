@@ -984,6 +984,21 @@ class CustomerShipmentController extends Controller
 
     public function print($id)
     {
+        return $this->generatePdf($id, 'pages.customer-shipment.pdf');
+    }
+
+    public function printStyle2($id)
+    {
+        return $this->generatePdf($id, 'pages.customer-shipment.pdf-style2');
+    }
+
+    public function printStyle3($id)
+    {
+        return $this->generatePdf($id, 'pages.customer-shipment.pdf-style3');
+    }
+
+    protected function generatePdf($id, $viewName)
+    {
         try {
             try {
                 $decryptedId = Crypt::decryptString($id);
@@ -998,6 +1013,7 @@ class CustomerShipmentController extends Controller
                 ->leftJoin('m_product as p', 'p.m_product_id', '=', 'iol.m_product_id')
                 ->leftJoin('c_uom as uom', 'uom.c_uom_id', '=', 'iol.c_uom_id')
                 ->leftJoin('m_locator as loc', 'loc.m_locator_id', '=', 'iol.m_locator_id')
+                ->leftJoin('c_orderline as ol', 'ol.c_orderline_id', '=', 'iol.c_orderline_id')
                 ->where('iol.m_inout_id', $decryptedId)
                 ->where('iol.isactive', 'Y')
                 ->select(
@@ -1007,7 +1023,9 @@ class CustomerShipmentController extends Controller
                     'iol.movementqty as qty',
                     'uom.uomsymbol as uom_name',
                     'iol.description',
-                    'loc.value as locator_name'
+                    'loc.value as locator_name',
+                    'iol.poreference as line_poref',
+                    'ol.poreference as ol_poref'
                 )
                 ->orderBy('iol.line')
                 ->get();
@@ -1039,12 +1057,20 @@ class CustomerShipmentController extends Controller
                     ->value('name') ?? '-';
             }
 
-            // SO document number
+            // SO info
             $soDocumentNo = '-';
+            $soDate = null;
+            $soPoReference = '-';
             if ($customerShipment->c_order_id) {
-                $soDocumentNo = \Illuminate\Support\Facades\DB::connection('idempiere')->table('c_order')
+                $so = \Illuminate\Support\Facades\DB::connection('idempiere')->table('c_order')
                     ->where('c_order_id', $customerShipment->c_order_id)
-                    ->value('documentno') ?? '-';
+                    ->select('documentno', 'dateordered', 'poreference')
+                    ->first();
+                if ($so) {
+                    $soDocumentNo = $so->documentno ?? '-';
+                    $soDate = $so->dateordered ? date('m/d/Y', strtotime($so->dateordered)) : null;
+                    $soPoReference = $so->poreference ?? '-';
+                }
             }
 
             // Org info
@@ -1062,14 +1088,72 @@ class CustomerShipmentController extends Controller
                 ->where('ad_client_id', $customerShipment->ad_client_id)
                 ->value('name') ?? '-';
 
-            $orgAddress = '-';
+            $orgAddress1 = '';
+            $orgAddress2 = '';
+            $orgAddress3 = '';
             $orgPhone = '-';
             $orgFax = '-';
             if ($orgInfo) {
-                $parts = array_filter([$orgInfo->address1, $orgInfo->address2, $orgInfo->city, $orgInfo->postal]);
-                $orgAddress = implode(', ', $parts) ?: '-';
+                $orgAddress1 = $orgInfo->address1 ?? '';
+                $orgAddress2 = $orgInfo->address2 ?? '';
+                $orgAddress3 = ($orgInfo->city ? $orgInfo->city . ', ' : '') . ($orgInfo->postal ?: '');
                 $orgPhone = $orgInfo->phone ?: '-';
                 $orgFax = $orgInfo->fax ?: '-';
+            }
+
+            // Override with company business partner address to match Requisition PDF
+            try {
+                $compBP = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('c_bpartner as bp')
+                    ->leftJoin('c_bpartner_location as bpl', function ($join) {
+                        $join->on('bp.c_bpartner_id', '=', 'bpl.c_bpartner_id')
+                             ->where('bpl.isactive', '=', 'Y');
+                    })
+                    ->leftJoin('c_location as locbp', 'bpl.c_location_id', '=', 'locbp.c_location_id')
+                    ->where('bp.c_bpartner_id', config('idempiere.client_id'))
+                    ->select('locbp.address1', 'locbp.address2', 'locbp.address3')
+                    ->first();
+                if ($compBP) {
+                    $orgAddress1 = $compBP->address1 ?? '';
+                    $orgAddress2 = $compBP->address2 ?? '';
+                    $orgAddress3 = $compBP->address3 ?? '';
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('Company Address override warning: ' . $e->getMessage());
+            }
+
+            // Fetch Logo from iDempiere
+            $logoBase64 = null;
+            try {
+                $clientInfo = \Illuminate\Support\Facades\DB::connection('idempiere')
+                    ->table('ad_clientinfo')
+                    ->where('ad_client_id', $customerShipment->ad_client_id)
+                    ->first();
+
+                if ($clientInfo && isset($clientInfo->logo_id)) {
+                    $image = \Illuminate\Support\Facades\DB::connection('idempiere')
+                        ->table('ad_image')
+                        ->where('ad_image_id', $clientInfo->logo_id)
+                        ->first();
+
+                    if ($image && $image->binarydata) {
+                        $content = is_resource($image->binarydata)
+                            ? stream_get_contents($image->binarydata)
+                            : $image->binarydata;
+                        $logoBase64 = 'data:image/png;base64,' . base64_encode($content);
+                    }
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('Customer Shipment Logo fetch warning: ' . $e->getMessage());
+            }
+
+            // Fallback to local logo if iDempiere logo not available
+            if (!$logoBase64) {
+                $logoPath = public_path('assets/media/logos/logo-long.png');
+                if (file_exists($logoPath)) {
+                    $type = pathinfo($logoPath, PATHINFO_EXTENSION);
+                    $logoBase64 = 'data:image/' . $type . ';base64,' . base64_encode(file_get_contents($logoPath));
+                }
             }
 
             // Prepared By (CreatedBy)
@@ -1085,20 +1169,25 @@ class CustomerShipmentController extends Controller
                     ->value('name') ?? '-';
             }
 
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pages.customer-shipment.pdf', [
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($viewName, [
                 'shipment' => $customerShipment,
                 'lines' => $lines,
                 'customerName' => $customerName,
                 'customerAddress' => $customerAddress,
                 'contactPerson' => $contactPerson,
                 'soDocumentNo' => $soDocumentNo,
+                'soDate' => $soDate,
+                'soPoReference' => $soPoReference,
                 'clientName' => $clientName,
                 'orgName' => $orgName,
-                'orgAddress' => $orgAddress,
+                'orgAddress1' => $orgAddress1,
+                'orgAddress2' => $orgAddress2,
+                'orgAddress3' => $orgAddress3,
                 'orgPhone' => $orgPhone,
                 'orgFax' => $orgFax,
                 'preparedBy' => $preparedBy,
                 'shipperName' => $shipperName,
+                'logoBase64' => $logoBase64,
             ]);
 
             $filename = 'DeliveryOrder-' . str_replace(['/', '\\'], '-', $customerShipment->documentno) . '.pdf';

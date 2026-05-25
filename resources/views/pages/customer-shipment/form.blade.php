@@ -80,7 +80,7 @@
                 <!-- Always Visible Action (Print) -->
                 @if(isset($shipment) && in_array($shipment->docstatus, $customerShipmentConfig['statuses']['printable']))
                     <button type="button"
-                        onclick="openPrintModal('{{ route('customer-shipment.print', \Illuminate\Support\Facades\Crypt::encryptString($shipment->m_inout_id)) }}')"
+                        onclick="openPrintModal('{{ route('customer-shipment.print', \Illuminate\Support\Facades\Crypt::encryptString($shipment->m_inout_id)) }}', '{{ \Illuminate\Support\Facades\Crypt::encryptString($shipment->m_inout_id) }}')"
                         class="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-4 focus:ring-gray-200 shadow-sm transition-all gap-2 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -1499,8 +1499,14 @@
                 <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 h-[85vh] flex flex-col">
                     <div
                         class="flex-shrink-0 flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">Print
-                            Preview</h3>
+                        <div class="flex items-center gap-3">
+                            <label for="printStyleSelect" class="text-sm font-medium text-gray-700 dark:text-gray-200"></label>
+                            <select id="printStyleSelect" onchange="changePrintStyle(this.value)" class="text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white py-1.5 px-3">
+                                <option value="style1" selected>Style 1</option>
+                                <option value="style2">Style 2</option>
+                                <option value="style3">Style 3</option>
+                            </select>
+                        </div>
                         <button onclick="closePrintModal()"
                             class="text-gray-400 hover:text-gray-500 focus:outline-none bg-transparent border-0">
                             <span class="sr-only">Close</span>
@@ -1522,14 +1528,32 @@
 
 @push('scripts')
     <script>
-        window.openPrintModal = function (url) {
+        window.openPrintModal = function (url, encryptedId) {
             const modal = document.getElementById('printModal');
             const iframe = document.getElementById('printFrame');
+            const styleSelect = document.getElementById('printStyleSelect');
             if (modal && iframe) {
+                window.currentPrintId = encryptedId;
+                if (styleSelect) styleSelect.value = 'style1'; // reset to style 1
                 iframe.src = url;
                 modal.classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
             }
+        }
+
+        window.changePrintStyle = function (style) {
+            const iframe = document.getElementById('printFrame');
+            if (!iframe || !window.currentPrintId) return;
+            
+            let url = '';
+            if (style === 'style1') {
+                url = `/customer-shipment/print/${window.currentPrintId}`;
+            } else if (style === 'style2') {
+                url = `/customer-shipment/print-style2/${window.currentPrintId}`;
+            } else if (style === 'style3') {
+                url = `/customer-shipment/print-style3/${window.currentPrintId}`;
+            }
+            iframe.src = url;
         }
 
         window.closePrintModal = function () {

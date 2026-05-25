@@ -149,6 +149,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Print Customer Shipment
     Route::get('/customer-shipment/print/{id}', [\App\Http\Controllers\CustomerShipmentController::class, 'print'])->name('customer-shipment.print');
+    Route::get('/customer-shipment/print-style2/{id}', [\App\Http\Controllers\CustomerShipmentController::class, 'printStyle2'])->name('customer-shipment.print-style2');
+    Route::get('/customer-shipment/print-style3/{id}', [\App\Http\Controllers\CustomerShipmentController::class, 'printStyle3'])->name('customer-shipment.print-style3');
 
     // Attachments Customer Shipment
     Route::post('/customer-shipment/attachment/upload', [\App\Http\Controllers\CustomerShipmentController::class, 'uploadAttachment'])->name('customer-shipment.attachment.upload');
