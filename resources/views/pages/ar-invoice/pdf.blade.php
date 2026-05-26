@@ -1,197 +1,273 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>AR Invoice {{ $invoice->documentno }}</title>
     <style>
         @page {
-            size: A4 portrait; /* Ukuran kertas A4 dan portrait */
             margin: 1cm;
         }
+
         body {
             font-family: Arial, sans-serif;
-            font-size: 8pt;
+            font-size: 9pt;
             margin: 0;
             padding: 0;
             color: #000;
         }
-        .container {
-            width: 100%;
-        }
+
         table {
             width: 100%;
             border-collapse: collapse;
         }
-        
-        /* Header */
+
         .header-table {
-            width: 100%;
-            margin-bottom: 5px;
+            border-bottom: none;
         }
+
         .header-table td {
             vertical-align: top;
+            padding: 2px;
         }
-        .company-name-title {
-            color: #EAB308;
-            font-size: 14pt;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        .company-addr {
-            font-size: 8pt;
-            line-height: 1.3;
-        }
-        .double-line {
-            border-top: 3px double #333;
-            margin-top: 8px;
-            margin-bottom: 20px;
-        }
-        
-        /* Logo */
+
         .logo-box {
-            width: 50px;
-            height: 50px;
-            border: 2px solid #FACC15;
-            padding: 3px;
-        }
-        .logo-box-inner {
+            width: 60px;
+            height: 60px;
             background-color: #FACC15;
-            width: 100%;
-            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 35px;
-            line-height: 50px;
+            font-size: 40px;
+            border: 1px solid #EAB308;
             text-align: center;
+            line-height: 60px;
         }
 
-        /* Invoice Main Details (Bill to & Invoice Info) */
-        .info-table {
-            width: 100%;
-            margin-bottom: 10px;
-        }
-        .info-table td {
-            vertical-align: top;
-            line-height: 1.4;
+        .company-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #EAB308;
+            text-transform: uppercase;
+            text-align: center;
+            margin-bottom: 5px;
         }
 
-        /* Invoice Title */
-        .invoice-title {
+        .company-address {
+            text-align: center;
+            font-size: 8pt;
+            line-height: 1.2;
+        }
+
+        .doc-title {
             text-align: center;
             font-size: 14pt;
             font-weight: bold;
-            text-decoration: underline;
-            margin-bottom: 10px;
-            margin-top: 10px;
+            margin: 10px 0;
+            text-transform: uppercase;
+            border-bottom: none;
         }
-        
-        /* Items Table */
+
+        .info-container {
+            border: none;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        .info-table td {
+            vertical-align: top;
+            padding: 3px 5px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 100px;
+        }
+
+        .colon {
+            width: 10px;
+            text-align: center;
+        }
+
         .items-table {
             width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
-        .items-table th, .items-table td {
-            border: 1px solid #000;
-            padding: 4px 6px;
-        }
+
         .items-table th {
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 8px 5px;
+            text-align: left;
             font-weight: bold;
-            text-align: center;
+            font-size: 9pt;
         }
-        
-        /* Totals / Summary Table */
+
+        .items-table td {
+            padding: 8px 5px;
+            vertical-align: top;
+        }
+
+        .items-table td.qty,
+        .items-table td.price,
+        .items-table td.amount {
+            text-align: right;
+        }
+
         .totals-table {
-            width: 350px;
-            float: right;
-            margin-bottom: 15px;
-            border-collapse: collapse;
+            width: 100%;
+            margin-top: 5px;
         }
-        .totals-table th, .totals-table td {
-            border: 1px solid #000;
-            padding: 4px 6px;
+
+        .totals-table td {
+            padding: 5px;
+            text-align: right;
         }
-        .totals-table th {
+
+        .totals-label {
             font-weight: bold;
+        }
+
+        .totals-grand-total td {
+            border-top: 0px solid #000;
+            padding-top: 6px;
+        }
+
+        .notes-section {
+            margin-top: 20px;
+            font-size: 9pt;
+        }
+
+        .notes-section strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .notes-content {
+            margin-bottom: 15px;
+            white-space: pre-wrap;
+            text-align: left;
+            border: none;
+            padding: 10px;
+        }
+
+        .provision-section {
+            margin-top: 10px;
+            font-size: 9pt;
+            font-style: italic;
+        }
+
+        .provision-list {
+            list-style-type: decimal;
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+
+        .provision-list li {
+            margin-bottom: 2px;
+            padding-left: 5px;
+        }
+
+        .signature-section {
+            margin-top: 30px;
+            width: 100%;
+        }
+
+        .signature-table td {
+            text-align: center;
+            vertical-align: top;
+            width: 25%;
+            padding: 10px;
+        }
+
+        .sig-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .sig-name {
+            font-weight: bold;
+            border-bottom: 1px solid #000;
+            display: inline-block;
+            min-width: 120px;
+            padding-bottom: 2px;
+        }
+
+        .sig-role {
+            font-size: 8pt;
+            margin-top: 2px;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
             text-align: center;
         }
-        
-        .clearfix::after {
-            content: "";
-            clear: both;
-            display: table;
+
+        .font-bold {
+            font-weight: bold;
         }
-        
+
+        .border-top {
+            border-top: 2px solid #000;
+        }
+
+        .border-bottom {
+            border-bottom: 2px solid #000;
+        }
+
         /* Terbilang Table */
         .terbilang-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 40px;
+            margin-bottom: 20px;
+            margin-top: 15px;
         }
+
         .terbilang-table td {
             border: 1px solid #000;
             padding: 5px 8px;
             font-weight: bold;
         }
+
         .terbilang-value {
             font-style: italic;
         }
-        
-        /* Signatures & Bank Info */
-        .signature-name {
-            font-weight: bold;
-            margin-bottom: 60px;
-        }
-        .signature-line {
-            font-weight: bold;
-            text-decoration: underline;
-        }
-        .signature-title {
-            font-weight: bold;
-        }
-        
-        .bank-info {
-            margin-top: 30px;
-            font-weight: bold;
-            font-size: 8pt;
-            line-height: 1.4;
-        }
-        
-        /* Utility Classes */
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
     </style>
 </head>
+
 <body>
-
-
 @php
-    // Invoice Lines Definition
-    $invoiceLines = [];
+    // Bridge data from AR Controller to AP Layout expectations
+    $lines = [];
     if(isset($invoice->c_invoice_id)) {
         try {
-            $invoiceLines = \Illuminate\Support\Facades\DB::connection('idempiere')
+            $lines = \Illuminate\Support\Facades\DB::connection('idempiere')
                 ->table('c_invoiceline as il')
                 ->leftJoin('m_product as p', 'il.m_product_id', '=', 'p.m_product_id')
-                ->leftJoin('c_orderline as ol', 'il.c_orderline_id', '=', 'ol.c_orderline_id')
-                ->leftJoin('c_order as o', 'ol.c_order_id', '=', 'o.c_order_id')
+                ->leftJoin('c_uom as u', 'il.c_uom_id', '=', 'u.c_uom_id')
                 ->where('il.c_invoice_id', $invoice->c_invoice_id)
                 ->select(
-                    'il.qtyinvoiced as qty', 
-                    'p.name as description', 
-                    'il.description as line_desc', 
-                    'o.documentno as po_number', 
-                    'il.priceentered as unit_price', 
-                    'il.linenetamt as amount'
+                    'il.qtyinvoiced as qtyentered', 
+                    'p.value as product_value',
+                    'p.name as product_name', 
+                    'il.description as description', 
+                    'il.priceentered as priceentered', 
+                    'il.linenetamt as amount',
+                    'u.uomsymbol'
                 )
                 ->orderBy('il.line')
                 ->get();
         } catch (\Exception $e) { }
     }
 
-    // Customer Location String Definition
-    $customerLocation = [];
+    $address1 = '';
+    $address2 = '';
+    $city = '';
     if(isset($invoice->c_bpartner_location_id)) {
         try {
             $loc = \Illuminate\Support\Facades\DB::connection('idempiere')
@@ -200,201 +276,242 @@
                 ->leftJoin('c_region as r', 'l.c_region_id', '=', 'r.c_region_id')
                 ->leftJoin('c_city as c', 'l.c_city_id', '=', 'c.c_city_id')
                 ->where('bpl.c_bpartner_location_id', $invoice->c_bpartner_location_id)
-                ->select('l.address1', 'l.address2', 'l.address3', 'l.city as l_city', 'c.name as city_name', 'r.name as region_name', 'l.postal')
+                ->select('l.address1', 'l.address2', 'l.city as l_city', 'c.name as city_name')
                 ->first();
             if($loc) {
-                if($loc->address1) $customerLocation[] = $loc->address1;
-                if($loc->address2) $customerLocation[] = $loc->address2;
-                if($loc->address3) $customerLocation[] = $loc->address3;
-                $cityTxt = $loc->city_name ?: $loc->l_city;
-                $regionTxt = [];
-                if($cityTxt) $regionTxt[] = $cityTxt;
-                if($loc->region_name) $regionTxt[] = $loc->region_name;
-                if(!empty($regionTxt)) {
-                    $txt = implode(' - ', $regionTxt);
-                    if($loc->postal) {
-                        $txt .= ', ' . $loc->postal;
-                    }
-                    $customerLocation[] = $txt;
-                }
+                $address1 = $loc->address1;
+                $address2 = $loc->address2;
+                $city = $loc->city_name ?: $loc->l_city;
             }
         } catch (\Exception $e) { }
     }
 
-    // Calculate totals
-    $subtotal = $invoice->totallines ?? 0;
+    $vendor = (object)[
+        'vendor_name' => $customer->customer_name ?? '-',
+        'address1' => $address1,
+        'address2' => $address2,
+        'city' => $city,
+        'contact_name' => $contactName ?? '-'
+    ];
+
+    // (clientName and orgInfo are now passed directly from the Controller)
+
+    $subTotal = $invoice->totallines ?? 0;
     $grandTotal = $invoice->grandtotal ?? 0;
-    
-    if ($subtotal == 0 && $grandTotal > 0) {
-        $subtotal = $grandTotal;
+    if ($subTotal == 0 && $grandTotal > 0) {
+        $subTotal = $grandTotal;
     }
     // Tax Diff for PPH 23
-    $taxAmt = abs($grandTotal - $subtotal);
-
-    // Number formatter to spaces like Image
-    function formatRp($num) {
-        return 'Rp ' . number_format($num, 0, ',', ' ');
-    }
+    $taxAmt = abs($grandTotal - $subTotal);
+    $withholdingTotal = $taxAmt;
+    $taxAmount = 0; // if there's regular tax
+    $invoice->supplierref = $invoice->poreference ?? '-';
 @endphp
-
-    <div class="container">
-        <!-- Logo & Header -->
-        <table class="header-table">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
             <tr>
-                <td style="width: 12%;">
-                    @if(!empty($logoBase64))
-                        <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; max-width: 80px;">
-                    @else
-                        <div class="logo-box">
-                            <div class="logo-box-inner">D</div>
-                        </div>
-                    @endif
-                </td>
-                <td style="width: 88%; text-align: center;">
-                    <div class="company-name-title">PT. DHARMAMULIA PRIMA KARYA</div>
-                    <div class="company-addr">
-                        Jalan Jogja-Solo KM 12,5, Padukuhan Karang Kalasan, RT 001/RW 006<br>
-                        Kel. Tirtomartani, Kec. Kalasan, Kab. Sleman, Daerah Istimewa Yogyakarta<br>
-                        <b>Telp. 0274 &ndash; 2850888, Fax. 0274 &ndash; 497468</b>
+                <td style="padding: 0;">
+                    <!-- Header -->
+                    <table class="header-table">
+                        <tr>
+                            <td style="border-bottom: none; padding: 8px; width: 60%; vertical-align: top;">
+                                <strong style="font-size: 13pt;">{{ $clientName ?? '' }}</strong><br>
+                                @if(!empty($orgInfo))
+                                    @if(!empty($orgInfo->address1))<span
+                                    style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
+                                    @if(!empty($orgInfo->address2))<span
+                                    style="font-size: 9pt;">{{ $orgInfo->address2 }}</span><br>@endif
+                                    @if(!empty($orgInfo->address3))<span
+                                    style="font-size: 9pt;">{{ $orgInfo->address3 }}</span>@endif
+                                @endif
+                            </td>
+                            <td
+                                style="border-bottom: none; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
+                                @if(!empty($logoBase64))
+                                    <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;"><br>
+                                @endif
+                                <span class="doc-title">AR Invoice</span>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Info Box -->
+                    <div class="info-container">
+                        <table class="info-table">
+                            <tr>
+                                <!-- Left Column -->
+                                <td width="50%">
+                                    <table>
+                                        <tr>
+                                            <td class="info-label">Customer</td>
+                                            <td class="colon">:</td>
+                                            <td><strong>{{ $vendor->vendor_name ?? '-' }}</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Address</td>
+                                            <td class="colon">:</td>
+                                            <td>
+                                                {{ $vendor->address1 }}<br>
+                                                {{ $vendor->address2 }} {{ $vendor->city }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Contact Person</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $vendor->contact_name ?? '-' }}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                                <!-- Right Column -->
+                                <td width="50%" style="border-left: 1px solid #000; padding-left: 10px;">
+                                    <table>
+                                        <tr>
+                                            <td class="info-label">Invoice No</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $invoice->documentno }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Date</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ \Carbon\Carbon::parse($invoice->dateinvoiced)->format('d M Y') }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">PO No</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $poDocumentNo ?? '-' }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Payment Term</td>
+                                            <td class="colon">:</td>
+                                            <td>{{ $paymentTerm ?? '-' }}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
                     </div>
                 </td>
             </tr>
-        </table>
-        
-        <div class="double-line"></div>
-
-        <!-- Bill To Section -->
-        <table class="info-table">
+        </thead>
+        <tbody>
             <tr>
-                <td style="width: 50%;">
-                    <div>Bill to :</div>
-                    <div style="font-weight: bold;">{{ $customer->customer_name ?? '-' }}</div>
-                    @if(count($customerLocation) > 0)
-                        @foreach($customerLocation as $locLine)
-                            <div>{{ $locLine }}</div>
-                        @endforeach
-                    @else
-                        <div>-</div>
+                <td style="padding: 0;">
+                    <!-- Items Table -->
+                    <table class="items-table" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th width="5%">NO</th>
+                                <th width="48%">Description</th>
+                                <th width="8%" style="text-align: right;">Qty</th>
+                                <th width="8%">UOM</th>
+                                <th width="15%" style="text-align: right;">Price</th>
+                                <th width="16%" style="text-align: right;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $subTotalIter = 0; @endphp
+                            @foreach($lines as $index => $line)
+                                @php
+                                    $lineAmount = $line->qtyentered * $line->priceentered;
+                                    $subTotalIter += $lineAmount;
+                                @endphp
+                                <tr>
+                                    <td style="padding-bottom: 0;">{{ $index + 1 }}</td>
+                                    <td style="padding-bottom: 0; font-weight: bold;">
+                                        {{ $line->product_value ?? '' }}
+                                    </td>
+                                    <td class="qty" style="padding-bottom: 0;">{{ number_format($line->qtyentered, 0) }}
+                                    </td>
+                                    <td style="padding-bottom: 0;">{{ $line->uomsymbol ?? ($line->uom_name ?? '') }}</td>
+                                    <td class="price" style="padding-bottom: 0;">{{ number_format($line->priceentered, 2) }}
+                                    </td>
+                                    <td class="amount" style="padding-bottom: 0;">{{ number_format($lineAmount, 2) }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding-top: 1px;"></td>
+                                    <td colspan="5" style="padding-top: 1px; font-size: 8pt; color: #444;">
+                                        {{ $line->product_name ?? ($line->description ?? '-') }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                            <tr>
+                                <td colspan="7" class="border-top"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Totals + Notes -->
+                    <table style="width: 100%; margin-top: 5px;" cellspacing="0">
+                        <tr>
+                            <!-- Notes (left 60%) -->
+                            <td width="60%" style="vertical-align: top; padding-right: 10px;">
+                                <div class="notes-section" style="margin-top: 0;">
+                                    <strong>Note :</strong>
+                                    <div class="notes-content">{{ trim($invoice->description ?? '') }}</div>
+                                </div>
+                            </td>
+                            <!-- Totals (right 40%) -->
+                            <td width="40%" style="vertical-align: top;">
+                                <table class="totals-table" style="width: 100%;">
+                                    <tr>
+                                        <td class="totals-label">Total Amount :</td>
+                                        <td>{{ number_format($subTotal, 2) }}</td>
+                                    </tr>
+                                    @if($withholdingTotal > 0)
+                                        <tr>
+                                            <td class="totals-label">PPh23 :</td>
+                                            <td style="color: #c05621;">({{ number_format($withholdingTotal, 2) }})</td>
+                                        </tr>
+                                    @endif
+                                    <tr class="totals-grand-total">
+                                        <td class="totals-label">Grand Total :</td>
+                                        <td><strong>{{ number_format($subTotal + ($taxAmount ?? 0) - $withholdingTotal, 2) }}</strong>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Terbilang Text -->
+                    <table class="terbilang-table">
+                        <tr>
+                            <td style="width: 100%; font-style: italic; padding: 10px;">
+                                Say# {{ $grandTotalWords }}#
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div style="margin-top: 15px; font-weight: bold; margin-bottom: 25px;">
+                        PO Ref : {{ $poDocumentNo ?? '-' }}
+                    </div>
+
+                    @if(count($lines) > 5)
+                        <div style="page-break-before: always;"></div>
                     @endif
-                </td>
-                <td style="width: 50%; padding-left: 20px;">
+
+                    <!-- Footer & Signature -->
                     <table style="width: 100%;">
                         <tr>
-                            <td class="text-right" style="width: 45%; padding-right: 5px;">Invoice No :</td>
-                            <td class="text-left" style="width: 55%;">{{ $invoice->documentno }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-right" style="padding-right: 5px;">Date :</td>
-                            <td class="text-left">{{ $invoice->dateinvoiced ? \Carbon\Carbon::parse($invoice->dateinvoiced)->format('d-M-y') : '-' }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-right" style="padding-right: 5px;">Term Payment :</td>
-                            <td class="text-left">{{ $paymentTerm ?? '-' }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-right" style="padding-right: 5px;">Periode :</td>
-                            <td class="text-left">{{ $invoice->description ?? '-' }}</td>
+                            <td style="width: 65%; vertical-align: top; font-size: 9pt; line-height: 1.4;">
+                                Pembayaran tagihan mohon ditransferkan ke rekening:<br>
+                                PT. ADYAWINSA PLASTICS INDUSTRY<br>
+                                PT Bank SMBC Indonesia Tbk., A/C No : 1011772001 (IDR)<br>
+                                Piutang dianggap lunas bila dana sudah masuk ke rekening kami.
+                            </td>
+                            <td style="width: 35%; vertical-align: top; text-align: center;">
+                                <div style="margin-bottom: 80px;">Your faithfully,</div>
+                                
+                                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; min-width: 180px; padding-bottom: 2px;">Abraham Sulaeman</div>
+                                <div style="font-size: 9pt; margin-top: 2px;">Admin Director</div>
+                            </td>
                         </tr>
                     </table>
                 </td>
             </tr>
-        </table>
-
-        <!-- Document Invoice Title -->
-        <div class="invoice-title">INVOICE</div>
-
-        <!-- Items Table -->
-        <table class="items-table">
-            <thead>
-                <tr>
-                    <th style="width: 5%;">NO</th>
-                    <th style="width: 10%;">QTY Trip</th>
-                    <th style="width: 40%;">Keterangan</th>
-                    <th style="width: 15%;">No. PO</th>
-                    <th style="width: 15%;">Unit Price</th>
-                    <th style="width: 15%;">AMOUNT</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if(count($invoiceLines) > 0)
-                    @php 
-                        $totalQty = 0; 
-                    @endphp
-                    @foreach($invoiceLines as $index => $line)
-                        @php 
-                            $totalQty += $line->qty;
-                        @endphp
-                        <tr>
-                            <td class="text-center">{{ $index + 1 }}</td>
-                            <td class="text-center">{{ (float)$line->qty }}</td>
-                            <td>{{ $line->description ?: $line->line_desc }}</td>
-                            <td class="text-center">{{ $line->po_number ?? $poDocumentNo ?? '-' }}</td>
-                            <td class="text-center">{{ formatRp($line->unit_price) }}</td>
-                            <td class="text-center">{{ formatRp($line->amount) }}</td>
-                        </tr>
-                    @endforeach
-                    <tr>
-                        <td></td>
-                        <td class="text-center" style="font-weight: bold;">{{ (float)$totalQty }}</td>
-                        <td colspan="4"></td>
-                    </tr>
-                @else
-                    <tr>
-                        <td class="text-center">1</td>
-                        <td class="text-center">1</td>
-                        <td>Biaya Tagihan Jasa</td>
-                        <td class="text-center">{{ $poDocumentNo ?? '-' }}</td>
-                        <td class="text-center">{{ formatRp($subtotal) }}</td>
-                        <td class="text-center">{{ formatRp($subtotal) }}</td>
-                    </tr>
-                    <tr>
-                        <td></td>
-                        <td class="text-center" style="font-weight: bold;">1</td>
-                        <td colspan="4"></td>
-                    </tr>
-                @endif
-            </tbody>
-        </table>
-
-        <!-- Totals Table -->
-        <div class="clearfix">
-            <table class="totals-table">
-                <tr>
-                    <th class="text-center" style="width: 50%;">SUBTOTAL</th>
-                    <th class="text-center" style="width: 50%;">{{ formatRp($subtotal) }}</th>
-                </tr>
-                <tr>
-                    <th class="text-center">PPH 23 (2%)</th>
-                    <th class="text-center">{{ formatRp($taxAmt) }}</th>
-                </tr>
-                <tr>
-                    <th class="text-center">Total</th>
-                    <th class="text-center">{{ formatRp($grandTotal) }}</th>
-                </tr>
-            </table>
-        </div>
-
-        <!-- Terbilang Text -->
-        <table class="terbilang-table">
-            <tr>
-                <td style="width: 15%; text-align: left;">TERBILANG</td>
-                <td style="width: 85%;" class="terbilang-value">{{ $grandTotalWords }}</td>
-            </tr>
-        </table>
-
-        <!-- Signature Section -->
-        <div class="signature-name">PT.DHARMAMULIA PRIMA KARYA</div>
-        <div class="signature-line">{{ $preparedBy ?? 'Heru Muskita' }}</div>
-        <div class="signature-title">Direktur Administrasi</div>
-
-        <!-- Bank Information Section -->
-        <div class="bank-info">
-            * Pembayaran di transfer ke :<br>
-            Bank Mega<br>
-            Rekening No : 00701466365<br>
-            an. PT. Dharmamulia Prima Karya
-        </div>
-
-    </div>
+        </tbody>
+    </table>
 </body>
+
 </html>

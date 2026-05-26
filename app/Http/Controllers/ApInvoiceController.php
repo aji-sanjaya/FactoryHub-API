@@ -1529,7 +1529,7 @@ class ApInvoiceController extends Controller
             }
             $withholdingTotal = $invoice->withholdingamount ?? 0;
             $grandTotal = $subTotal + ($taxAmount ?? 0) - $withholdingTotal;
-            $grandTotalWords = \App\Http\Controllers\HelperController::numberToWordsIndonesian($grandTotal);
+            $grandTotalWords = \App\Http\Controllers\HelperController::numberToWordsEnglish($grandTotal);
 
             $pdf = Pdf::loadView('pages.ap-invoice.pdf', [
                 'invoice' => $invoice,

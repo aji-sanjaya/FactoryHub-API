@@ -5,66 +5,96 @@ namespace App\Http\Controllers;
 class HelperController extends Controller
 {
     /**
-     * Convert a number to spelled-out words in Indonesian.
+     * Convert a number to spelled-out words in English.
      *
      * @param float|int $value
      * @return string
      */
-    public static function numberToWordsIndonesian($value)
+    public static function numberToWordsEnglish($value)
     {
-        if ($value < 0) {
-            $result = "minus " . trim(self::spellNumberIndonesian($value));
+        if (strpos((string)$value, '.') !== false) {
+            list($integer, $decimal) = explode('.', (string)$value, 2);
         } else {
-            $result = trim(self::spellNumberIndonesian($value));
+            $integer = $value;
+            $decimal = null;
         }
-        return ucwords($result) . " Rupiah";
+
+        if ($integer < 0) {
+            $result = "minus " . trim(self::spellNumberEnglish(abs($integer)));
+        } else {
+            $result = trim(self::spellNumberEnglish($integer));
+        }
+
+        $result = ucwords($result);
+
+        if ($decimal !== null && rtrim($decimal, '0') !== '') {
+            $decimalWords = [];
+            $chars = str_split(rtrim($decimal, '0'));
+            foreach ($chars as $char) {
+                $decimalWords[] = self::spellNumberEnglish((int)$char);
+            }
+            $result .= " point " . implode(' ', array_map('trim', $decimalWords));
+        }
+
+        return $result;
     }
 
     /**
-     * Recursive helper to spell numbers in Indonesian.
+     * Recursive helper to spell numbers in English.
      *
      * @param float|int $value
      * @return string
      */
-    private static function spellNumberIndonesian($value)
+    private static function spellNumberEnglish($value)
     {
         $value = abs($value);
         $words = [
-            0 => "",
-            1 => "satu",
-            2 => "dua",
-            3 => "tiga",
-            4 => "empat",
-            5 => "lima",
-            6 => "enam",
-            7 => "tujuh",
-            8 => "delapan",
-            9 => "sembilan",
-            10 => "sepuluh",
-            11 => "sebelas"
+            0 => "zero",
+            1 => "one",
+            2 => "two",
+            3 => "three",
+            4 => "four",
+            5 => "five",
+            6 => "six",
+            7 => "seven",
+            8 => "eight",
+            9 => "nine",
+            10 => "ten",
+            11 => "eleven",
+            12 => "twelve",
+            13 => "thirteen",
+            14 => "fourteen",
+            15 => "fifteen",
+            16 => "sixteen",
+            17 => "seventeen",
+            18 => "eighteen",
+            19 => "nineteen",
+            20 => "twenty",
+            30 => "thirty",
+            40 => "forty",
+            50 => "fifty",
+            60 => "sixty",
+            70 => "seventy",
+            80 => "eighty",
+            90 => "ninety"
         ];
+        
         $temp = "";
         
-        if ($value < 12) {
+        if ($value < 21) {
             $temp = " " . $words[$value];
-        } else if ($value < 20) {
-            $temp = self::spellNumberIndonesian($value - 10) . " belas";
         } else if ($value < 100) {
-            $temp = self::spellNumberIndonesian((int) ($value / 10)) . " puluh" . self::spellNumberIndonesian($value % 10);
-        } else if ($value < 200) {
-            $temp = " seratus" . self::spellNumberIndonesian($value - 100);
+            $temp = " " . $words[10 * (int) ($value / 10)] . ($value % 10 != 0 ? "-" . $words[$value % 10] : "");
         } else if ($value < 1000) {
-            $temp = self::spellNumberIndonesian((int) ($value / 100)) . " ratus" . self::spellNumberIndonesian($value % 100);
-        } else if ($value < 2000) {
-            $temp = " seribu" . self::spellNumberIndonesian($value - 1000);
+            $temp = " " . $words[(int) ($value / 100)] . " hundred" . ($value % 100 != 0 ? self::spellNumberEnglish($value % 100) : "");
         } else if ($value < 1000000) {
-            $temp = self::spellNumberIndonesian((int) ($value / 1000)) . " ribu" . self::spellNumberIndonesian($value % 1000);
+            $temp = self::spellNumberEnglish((int) ($value / 1000)) . " thousand" . ($value % 1000 != 0 ? self::spellNumberEnglish($value % 1000) : "");
         } else if ($value < 1000000000) {
-            $temp = self::spellNumberIndonesian((int) ($value / 1000000)) . " juta" . self::spellNumberIndonesian($value % 1000000);
+            $temp = self::spellNumberEnglish((int) ($value / 1000000)) . " million" . ($value % 1000000 != 0 ? self::spellNumberEnglish($value % 1000000) : "");
         } else if ($value < 1000000000000) {
-            $temp = self::spellNumberIndonesian((int) ($value / 1000000000)) . " milyar" . self::spellNumberIndonesian(fmod($value, 1000000000));
+            $temp = self::spellNumberEnglish((int) ($value / 1000000000)) . " billion" . ($value % 1000000000 != 0 ? self::spellNumberEnglish(fmod($value, 1000000000)) : "");
         } else if ($value < 1000000000000000) {
-            $temp = self::spellNumberIndonesian((int) ($value / 1000000000000)) . " trilyun" . self::spellNumberIndonesian(fmod($value, 1000000000000));
+            $temp = self::spellNumberEnglish((int) ($value / 1000000000000)) . " trillion" . ($value % 1000000000000 != 0 ? self::spellNumberEnglish(fmod($value, 1000000000000)) : "");
         }
         
         return $temp;

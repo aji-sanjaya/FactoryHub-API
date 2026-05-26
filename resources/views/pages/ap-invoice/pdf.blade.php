@@ -375,15 +375,11 @@
                         </tbody>
                     </table>
 
-                    <!-- Totals + Notes -->
+                    <!-- Totals -->
                     <table style="width: 100%; margin-top: 5px;" cellspacing="0">
                         <tr>
-                            <!-- Notes (left 60%) -->
+                            <!-- Empty Left (60%) -->
                             <td width="60%" style="vertical-align: top; padding-right: 10px;">
-                                <div class="notes-section" style="margin-top: 0;">
-                                    <strong>Note :</strong>
-                                    <div class="notes-content">{{ trim($invoice->description ?? '') }}</div>
-                                </div>
                             </td>
                             <!-- Totals (right 40%) -->
                             <td width="40%" style="vertical-align: top;">
@@ -412,57 +408,31 @@
                     <!-- Terbilang Text -->
                     <table class="terbilang-table">
                         <tr>
-                            <td style="width: 100%;" class="terbilang-value"
-                                style="margin-top: 15px; margin-bottom: 15px;">
-                                <br>
-                                <span style="padding: 20px">{{ $grandTotalWords }}</span>
-                                <br><br>
+                            <td style="width: 100%; font-style: italic; padding: 10px;">
+                                Say# {{ $grandTotalWords }}#
                             </td>
                         </tr>
                     </table>
+
+                    <div style="margin-top: 10px; font-size: 9pt; margin-bottom: 25px; line-height: 1.4;">
+                        {!! nl2br(e(trim($invoice->description ?? ''))) !!}<br>
+                        PO Ref : {{ $poDocumentNo ?? '-' }}
+                    </div>
 
                     @if(count($lines) > 5)
                         <div style="page-break-before: always;"></div>
                     @endif
 
-                    <!-- Signatures -->
-                    <table class="signature-table">
+                    <!-- Footer & Signature -->
+                    <table style="width: 100%;">
                         <tr>
-                            <td>
-                                <div class="sig-title">Prepared By</div>
-                                @if(isset($preparedQr) && $preparedQr)
-                                    <div style="margin-bottom: 5px;"><img src="{{ $preparedQr }}" alt="QR"
-                                            style="height: 60px; width: 60px;"></div>
-                                @else
-                                    <div style="height: 65px;"></div>
-                                @endif
-                                <div class="sig-name">{{ $preparedBy ?? '..................' }}</div>
-                                <div class="sig-role" style="font-weight: bold;">Finance</div>
-                                <div style="font-size: 7pt; font-style: italic;">({{ $preparedDate ?? '' }})</div>
+                            <td style="width: 65%; vertical-align: top; font-size: 9pt;">
                             </td>
-                            <td>
-                                <div class="sig-title">Checked By</div>
-                                @if(isset($checkedQr) && $checkedQr)
-                                    <div style="margin-bottom: 5px;"><img src="{{ $checkedQr }}" alt="QR"
-                                            style="height: 60px; width: 60px;"></div>
-                                @else
-                                    <div style="height: 65px;"></div>
-                                @endif
-                                <div class="sig-name">{{ $checkedBy ?? '..................' }}</div>
-                                <div class="sig-role" style="font-weight: bold;">Finance</div>
-                                <div style="font-size: 7pt; font-style: italic;">({{ $checkedDate ?? '' }})</div>
-                            </td>
-                            <td>
-                                <div class="sig-title">Approved By</div>
-                                @if(isset($approvedQr) && $approvedQr)
-                                    <div style="margin-bottom: 5px;"><img src="{{ $approvedQr }}" alt="QR"
-                                            style="height: 60px; width: 60px;"></div>
-                                @else
-                                    <div style="height: 65px;"></div>
-                                @endif
-                                <div class="sig-name">{{ $approvedBy ?? '..................' }}</div>
-                                <div class="sig-role" style="font-weight: bold;">Director</div>
-                                <div style="font-size: 7pt; font-style: italic;">({{ $approvedDate ?? '' }})</div>
+                            <td style="width: 35%; vertical-align: top; text-align: center;">
+                                <div style="margin-bottom: 80px;">Your faithfully,</div>
+                                
+                                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; min-width: 180px; padding-bottom: 2px;">Abraham Sulaeman</div>
+                                <div style="font-size: 9pt; margin-top: 2px;">Admin Director</div>
                             </td>
                         </tr>
                     </table>

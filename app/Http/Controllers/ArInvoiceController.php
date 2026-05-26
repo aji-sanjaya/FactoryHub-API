@@ -1244,6 +1244,29 @@ class ArInvoiceController extends Controller
                     ->value('documentno');
             }
 
+            // Fetch Client Name
+            $clientName = DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $invoice->ad_client_id)
+                ->value('name');
+
+            // Fetch Org address via c_bpartner -> c_bpartner_location -> c_location
+            $orgInfo = null;
+            try {
+                $orgInfo = DB::connection('idempiere')
+                    ->table('c_bpartner as bp')
+                    ->leftJoin('c_bpartner_location as bpl', function ($join) {
+                        $join->on('bp.c_bpartner_id', '=', 'bpl.c_bpartner_id')
+                            ->where('bpl.isactive', '=', 'Y');
+                    })
+                    ->leftJoin('c_location as locbp', 'bpl.c_location_id', '=', 'locbp.c_location_id')
+                    ->where('bp.c_bpartner_id', config('idempiere.client_id'))
+                    ->select('bp.taxid', 'locbp.address1', 'locbp.address2', 'locbp.address3')
+                    ->first();
+            } catch (\Exception $e) {
+                Log::warning('AR Invoice Org info fetch warning: ' . $e->getMessage());
+            }
+
             // Fetch Payment Term
             $paymentTerm = DB::connection('idempiere')
                 ->table('c_paymentterm')
@@ -1301,7 +1324,7 @@ class ArInvoiceController extends Controller
 
             // Calculate Grand Total spelled-out words
             $grandTotal = $invoice->grandtotal ?? 0;
-            $grandTotalWords = \App\Http\Controllers\HelperController::numberToWordsIndonesian($grandTotal);
+            $grandTotalWords = \App\Http\Controllers\HelperController::numberToWordsEnglish($grandTotal);
 
             $pdf = Pdf::loadView('pages.ar-invoice.pdf', [
                 'invoice' => $invoice,
@@ -1312,6 +1335,8 @@ class ArInvoiceController extends Controller
                 'contactName' => $contactName,
                 'logoBase64' => $logoBase64,
                 'grandTotalWords' => $grandTotalWords,
+                'clientName' => $clientName,
+                'orgInfo' => $orgInfo,
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'AR-Invoice-' . str_replace(['/', '\\'], '-', $invoice->documentno) . '.pdf';
