@@ -14,7 +14,6 @@
         $isNew = is_null($invoice);
         $isReadOnly = !$isNew && in_array($invoice->docstatus, $readOnlyStatuses);
         $docNo = $isNew ? '** New **' : $invoice->documentno;
-        $clientName = session('idempiere_client_name', 'Dharmamulia Prima Karya');
     @endphp
 
     {{-- ── Section 1: General Information ─────────────────────────────────── --}}

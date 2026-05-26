@@ -44,7 +44,7 @@
                                     </svg>
                                 </a>
                                 <button type="button"
-                                    onclick="openPrintModal('{{ route('customer-shipment.print', ['id' => \Illuminate\Support\Facades\Crypt::encryptString($req->m_inout_id)]) }}')"
+                                    onclick="openPrintModal('{{ route('customer-shipment.print', ['id' => \Illuminate\Support\Facades\Crypt::encryptString($req->m_inout_id)]) }}', '{{ \Illuminate\Support\Facades\Crypt::encryptString($req->m_inout_id) }}')"
                                     class="text-gray-500 hover:text-brand-500 dark:text-gray-400 dark:hover:text-brand-500"
                                     title="Print">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

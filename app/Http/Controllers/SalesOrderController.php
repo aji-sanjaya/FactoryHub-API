@@ -910,6 +910,13 @@ class SalesOrderController extends Controller
                 \Illuminate\Support\Facades\Log::warning('Logo fetch warning: ' . $e->getMessage());
             }
 
+            // Fetch Client Name
+            $client = \Illuminate\Support\Facades\DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $salesOrder->ad_client_id)
+                ->first();
+            $clientName = $client ? $client->name : 'Unknown Client';
+
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pages.sales-order.pdf', [
                 'salesOrder' => $salesOrder,
                 'lines' => $lines,
@@ -923,6 +930,7 @@ class SalesOrderController extends Controller
                 'preparedDate' => $preparedDate,
                 'checkedDate' => $checkedDate,
                 'approvedDate' => $approvedDate,
+                'clientName' => $clientName,
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'SalesOrder-' . str_replace(['/', '\\'], '-', $salesOrder->documentno) . '.pdf';

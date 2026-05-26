@@ -4,8 +4,8 @@
     <div class="main-content group-data-[sidebar-size=lg]:xl:ml-[322px]">
 
         <!-- Summary Cards -->
-        <x-customer-shipment.summary-cards :countAll="$countAll" :countDraft="$countDraft" :countInProgress="$countInProgress"
-            :countCompleted="$countCompleted" />
+        <x-customer-shipment.summary-cards :countAll="$countAll" :countDraft="$countDraft"
+            :countInProgress="$countInProgress" :countCompleted="$countCompleted" />
 
         <!-- Action / Filter Bar -->
         <x-customer-shipment.filter-bar />
@@ -19,22 +19,35 @@
         <x-customer-shipment.create-modal />
 
         <!-- Print Modal -->
-        <div id="printModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog"
+        <div id="printModal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog"
             aria-modal="true">
             <div
-                class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0 backdrop-blur-sm">
+                class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0 backdrop-blur-sm bg-gray-500/30">
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
                 <div
-                    class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full">
-                    <div class="bg-white px-4 pt-5 pb-4 sm:p-2 sm:pb-2 h-[85vh] flex flex-col">
-                        <div class="flex-shrink-0 flex justify-between items-center  pb-1 relative z-10"
-                            style="background-color: transparent;">
-                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title"></h3>
+                    class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full dark:bg-gray-800">
+                    <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 h-[85vh] flex flex-col">
+                        <div
+                            class="flex-shrink-0 flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center gap-3">
+                                <label for="printStyleSelect"
+                                    class="text-sm font-medium text-gray-700 dark:text-gray-200"></label>
+                                <select id="printStyleSelect" onchange="changePrintStyle(this.value)"
+                                    class="text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white py-1.5 px-3">
+                                    <option value="style1" selected>Style 1</option>
+                                    <option value="style2">Style 2</option>
+                                </select>
+                            </div>
                             <button onclick="closePrintModal()"
-                                class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                                Close
+                                class="text-gray-400 hover:text-gray-500 focus:outline-none bg-transparent border-0">
+                                <span class="sr-only">Close</span>
+                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                             </button>
                         </div>
-                        <div class="flex-1 w-full relative bg-gray-100 rounded-lg overflow-hidden z-0">
+                        <div class="flex-1 w-full relative bg-gray-100 dark:bg-gray-900 mt-4 rounded-lg overflow-hidden">
                             <iframe id="printFrame" src="" class="absolute inset-0 w-full h-full border-0"></iframe>
                         </div>
                     </div>
@@ -47,33 +60,55 @@
     @push('scripts')
         <script>
             // Print Modal Functions
-            window.openPrintModal = function (url) {
+            window.openPrintModal = function (url, encryptedId) {
                 const modal = document.getElementById('printModal');
                 const iframe = document.getElementById('printFrame');
+                const styleSelect = document.getElementById('printStyleSelect');
+                if (modal && iframe) {
+                    window.currentPrintId = encryptedId;
+                    if (styleSelect) styleSelect.value = 'style1'; // reset to style 1
+                    iframe.src = url;
+                    modal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            window.changePrintStyle = function (style) {
+                const iframe = document.getElementById('printFrame');
+                if (!iframe || !window.currentPrintId) return;
+
+                let url = '';
+                if (style === 'style1') {
+                    url = `/customer-shipment/print/${window.currentPrintId}`;
+                } else if (style === 'style2') {
+                    url = `/customer-shipment/print-style2/${window.currentPrintId}`;
+                } else if (style === 'style3') {
+                    url = `/customer-shipment/print-style3/${window.currentPrintId}`;
+                }
                 iframe.src = url;
-                modal.classList.remove('hidden');
-                document.body.style.overflow = 'hidden'; // Prevent background scrolling
             }
 
             window.closePrintModal = function () {
                 const modal = document.getElementById('printModal');
                 const iframe = document.getElementById('printFrame');
-                modal.classList.add('hidden');
-                iframe.src = 'about:blank'; // Clear source to stop loading
-                document.body.style.overflow = ''; // Restore scrolling
+                if (modal) {
+                    modal.classList.add('hidden');
+                    if (iframe) iframe.src = 'about:blank';
+                    document.body.style.overflow = '';
+                }
             }
 
-            window.toggleTracking = function(el, docId, field) {
+            window.toggleTracking = function (el, docId, field) {
                 const isTargetChecked = el.checked;
-                
+
                 // Keep the checkbox looking like it didn't change while loading
                 el.checked = !isTargetChecked;
-                
+
                 const value = isTargetChecked ? 'Y' : 'N';
-                
+
                 // Show spinner by hiding the checkbox
                 el.style.display = 'none';
-                
+
                 // Create spinner element and insert it
                 let spinner = document.createElement('div');
                 spinner.className = 'tracking-spinner inline-block w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto';
@@ -86,11 +121,11 @@
                 }).then(res => {
                     // Update state to the intended one on success
                     el.checked = isTargetChecked;
-                    
+
                     // Remove spinner from DOM, show checkbox explicitly
                     spinner.remove();
                     el.style.display = '';
-                    
+
                     Swal.fire({
                         icon: 'success',
                         title: 'Updated',
@@ -105,7 +140,7 @@
                     // Remove spinner, restore checkbox
                     spinner.remove();
                     el.style.display = '';
-                    
+
                     Swal.fire({
                         icon: 'error',
                         title: 'Failed',
@@ -135,22 +170,6 @@
 
                     console.log('Fetching data from:', url, { search: query, filters: currentFilters });
 
-                    // Helper to construct URL with params if they aren't already there
-                    // But since we are using withQueryString() on backend, the pagination links ALREADY have params.
-                    // However, for the initial search/filter, we build params manually.
-                    // If 'url' is passed (from pagination), we likely just want to fetch it directly.
-                    // But wait: if I type search THEN click page 2, page 2 link might be stale if the table didn't refresh?
-                    // YES, the table refetches on search input, so the pagination links ARE fresh.
-                    // So we can blindly trust the URL from the link.
-
-                    // Logic: If plain URL (route), append params. If paginated URL, use as is (or merge??)
-                    // Safest: Use params object for Search/Filter, but for Pagination URL, mostly trust it OR merge.
-                    // Let's rely on Axios params merging.
-
-                    // Actually, if we pass a full URL to axios.get, and ALSO params, axios merges them.
-                    // If URL already has ?search=foo, and we pass params: {search: foo}, it might duplicate or handle it.
-                    // Simpler: If it's a pagination link, just use that URL. The controller handles it.
-                    // If it's a Search/Filter event, use base route + params.
 
                     const isPagination = url.includes('page=');
                     const config = isPagination ? {} : {

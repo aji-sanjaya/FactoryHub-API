@@ -14,7 +14,6 @@
         $isNew = is_null($payment);
         $isReadOnly = !$isNew && in_array($payment->docstatus, $readOnlyStatuses);
         $docNo = $isNew ? '** New **' : $payment->documentno;
-        $clientName = session('idempiere_client_name', 'Dharmamulia Prima Karya');
     @endphp
 
     {{-- ── Section 1: General Information ─────────────────────────────────── --}}

@@ -165,8 +165,14 @@
                     @endif
                 </td>
                 <td class="title-cell">
+                    @php
+                        $displayName = $clientName ?? 'Unknown Client';
+                        if (!preg_match('/^PT\.?/i', $displayName)) {
+                            $displayName = 'PT. ' . $displayName;
+                        }
+                    @endphp
                     <h1>SALES ORDER</h1>
-                    <h2>PT. DHARMAMULIA PRIMA KARYA</h2>
+                    <h2>{{ strtoupper($displayName) }}</h2>
                 </td>
                 <td class="info-cell">
                     <div class="info-row"><span class="info-label">Doc. No</span>: {{ $salesOrder->documentno }}</div>

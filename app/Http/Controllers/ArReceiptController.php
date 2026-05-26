@@ -113,6 +113,22 @@ class ArReceiptController extends Controller
         $roleId = Session::get('idempiere_role');
         $clientId = Session::get('idempiere_client');
 
+        $userData = Session::get('user_data');
+        $tenantName = config('idempiere.tenant.name');
+        $clientName = null;
+        if (is_array($userData)) {
+            $clientName = trim((string) ($userData['client_name'] ?? '')) ?: null;
+        } elseif (is_object($userData)) {
+            $clientName = trim((string) ($userData->client_name ?? '')) ?: null;
+        }
+        if (!$clientName && $clientId) {
+            $clientName = DB::connection('idempiere')
+                ->table('ad_client')
+                ->where('ad_client_id', $clientId)
+                ->value('name');
+        }
+        $clientName = $clientName ?: $tenantName;
+
         // Organizations
         $organizations = DB::connection('idempiere')->select("
             SELECT o.ad_org_id AS id, o.name AS text
@@ -218,6 +234,7 @@ class ArReceiptController extends Controller
             'organizations' => $organizations,
             'customers' => $customers,
             'customerContacts' => $customerContacts,
+            'clientName' => $clientName,
             'docTypes' => $docTypes,
             'currencies' => $currencies,
             'bankAccounts' => $bankAccounts,

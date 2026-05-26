@@ -283,7 +283,7 @@
             <table style="width: 100%; border-collapse: collapse; border: none; table-layout: fixed;">
                 <tr>
                     <!-- Left Side: Supplier Area -->
-                    <td style="width: 53%; border: none; padding: 0 10px 0 0; vertical-align: top;">
+                    <td style="width: 53%; border: none; padding: 13px 10px 0 0; vertical-align: top;">
                         <div
                             style="font-style: italic; font-size: 8.5pt; margin-bottom: 3px;  font-weight: bold;">
                             Transfered Legalization (Supplier Area)</div>
