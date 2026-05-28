@@ -783,7 +783,7 @@ class RequisitionController extends Controller
             // 1. Prepared By (CreatedBy)
             $preparedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
                 ->where('ad_user_id', $requisition->createdby)
-                ->value('name');
+                ->value('description');
 
             $preparedDate = date('d M Y H:i', strtotime($requisition->updated));
             $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate($requisition->documentno);
@@ -797,7 +797,7 @@ class RequisitionController extends Controller
             if ($requisition->adw_ad_user_checked_id) {
                 $checkedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
                     ->where('ad_user_id', $requisition->adw_ad_user_checked_id)
-                    ->value('name');
+                    ->value('description');
 
                 // Check Status (AP/RE)
                 if ($requisition->adw_checked_isapproved == 'AP' && $requisition->adw_checked_date) {
@@ -817,7 +817,7 @@ class RequisitionController extends Controller
             if ($requisition->adw_ad_user_approved_id) {
                 $approvedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
                     ->where('ad_user_id', $requisition->adw_ad_user_approved_id)
-                    ->value('name');
+                    ->value('description');
 
                 // Check Status (AP/RE)
                 if ($requisition->adw_approve_isapproved == 'AP' && $requisition->adw_approved_date) {
