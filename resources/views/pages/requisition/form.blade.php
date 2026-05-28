@@ -281,7 +281,7 @@
             // Initialization Function to be called on ready a    nd after AJAX
             function initScripts() {
                 // Init Select2 on All Dropdowns (Header variables)
-                $('#priority_rule, #org_id, #warehouse_id, #pricelist_id, #adw_ad_user_checked_id, #adw_ad_user_approved_id, #cost_center_id').select2({
+                $('#priority_rule, #org_id, #warehouse_id, #pricelist_id, #adw_ad_user_checked_id, #adw_ad_user_approved_id, #cost_center_id, #c_department_id').select2({
                     width: '100%',
                     placeholder: '- Select -'
                 });
@@ -842,10 +842,12 @@
 
                 const description = document.getElementById('description') ? document.getElementById('description').value : '';
                 const dateRequired = document.getElementById('date_required') ? document.getElementById('date_required').value : '';
+                const dateDoc = document.getElementById('datedoc') ? document.getElementById('datedoc').value : '';
 
                 const data = {
                     description: description,
                     date_required: dateRequired,
+                    datedoc: dateDoc,
                     warehouse_id: warehouseId,
                     org_id: orgId,
                     pricelist_id: pricelistId,
@@ -853,6 +855,7 @@
                     adw_ad_user_checked_id: $('#adw_ad_user_checked_id').val(),
                     adw_ad_user_approved_id: $('#adw_ad_user_approved_id').val(),
                     cost_center_id: $('#cost_center_id').val(),
+                    c_department_id: $('#c_department_id').val(),
                 };
 
                 if (!data.date_required) {

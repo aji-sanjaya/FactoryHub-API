@@ -122,6 +122,14 @@ class RequisitionController extends Controller
                 ORDER BY name
             ", [$clientId]);
 
+            // Fetch Departments
+            $departments = \Illuminate\Support\Facades\DB::connection('idempiere')->select("
+                SELECT c_department_id AS id, name AS text
+                FROM c_department
+                WHERE isactive = 'Y' AND ad_client_id = ?
+                ORDER BY name
+            ", [$clientId]);
+
             // Fetch Client Name
             $client = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_client')
                 ->where('ad_client_id', $clientId)
@@ -188,11 +196,13 @@ class RequisitionController extends Controller
                 'pricelists' => $pricelists,
                 'users' => $users,
                 'costCenters' => $costCenters,
+                'departments' => $departments,
                 'documentIdParam' => $docId,
                 'docNo' => isset($requisition) ? $requisition->documentno : '** New **',
                 'status' => isset($requisition) ? $requisition->status_label : $requisitionConfig['defaults']['document_status_label'],
                 'desc' => isset($requisition) ? $requisition->description : '',
                 'currentOrgId' => isset($requisition) ? $requisition->ad_org_id : null,
+                'dateDocValue' => isset($requisition) ? \Carbon\Carbon::parse($requisition->datedoc)->format('m-d-Y') : now()->format('m-d-Y'),
                 // Note: Logic for defaults is currently in Blade, but for Partials we might need it here or rely on Blade to re-calc.
                 // Since I copied the Blade logic to Partials, they should re-calc defaults if variables are passed.
                 // However, Blade Partials rely on variables like $isNew.
@@ -393,6 +403,8 @@ class RequisitionController extends Controller
             'adw_ad_user_checked_id' => 'nullable',
             'adw_ad_user_approved_id' => 'nullable',
             'cost_center_id' => 'nullable',
+            'c_department_id' => 'nullable',
+            'datedoc' => 'required|date_format:m-d-Y',
         ]);
 
         // Get Context
@@ -418,7 +430,7 @@ class RequisitionController extends Controller
 
         // Format Dates
         $dateRequired = \Carbon\Carbon::createFromFormat('m-d-Y', $validated['date_required'])->format('Y-m-d');
-        $dateDoc = now()->format('Y-m-d');
+        $dateDoc = \Carbon\Carbon::createFromFormat('m-d-Y', $validated['datedoc'])->format('Y-m-d');
 
         // Payload Structure based on User Request
         $payload = [
@@ -436,6 +448,7 @@ class RequisitionController extends Controller
             'ADW_AD_User_Checked_ID' => !empty($validated['adw_ad_user_checked_id']) ? (int) $validated['adw_ad_user_checked_id'] : null,
             'ADW_AD_User_Approved_ID' => !empty($validated['adw_ad_user_approved_id']) ? (int) $validated['adw_ad_user_approved_id'] : null,
             'C_CostCenter_ID' => !empty($validated['cost_center_id']) ? (int) $validated['cost_center_id'] : null,
+            'C_Department_ID' => !empty($validated['c_department_id']) ? (int) $validated['c_department_id'] : null,
             'IsActive' => true,
         ];
 
@@ -485,6 +498,8 @@ class RequisitionController extends Controller
             'adw_ad_user_checked_id' => 'nullable',
             'adw_ad_user_approved_id' => 'nullable',
             'cost_center_id' => 'nullable',
+            'c_department_id' => 'nullable',
+            'datedoc' => 'nullable|date_format:m-d-Y',
         ]);
 
         // Prepare Payload (Only send what changed or full header?)
@@ -507,9 +522,14 @@ class RequisitionController extends Controller
             $payload['ADW_AD_User_Approved_ID'] = (int) $validated['adw_ad_user_approved_id'];
         if (!empty($validated['cost_center_id']))
             $payload['C_CostCenter_ID'] = (int) $validated['cost_center_id'];
+        if (!empty($validated['c_department_id']))
+            $payload['C_Department_ID'] = (int) $validated['c_department_id'];
 
         if (!empty($validated['date_required'])) {
             $payload['DateRequired'] = \Carbon\Carbon::createFromFormat('m-d-Y', $validated['date_required'])->format('Y-m-d');
+        }
+        if (!empty($validated['datedoc'])) {
+            $payload['DateDoc'] = \Carbon\Carbon::createFromFormat('m-d-Y', $validated['datedoc'])->format('Y-m-d');
         }
 
         try {

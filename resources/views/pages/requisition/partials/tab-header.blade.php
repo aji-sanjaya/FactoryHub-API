@@ -105,6 +105,18 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Date Doc -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Date
+                        Doc <span class="text-red-500">*</span></label>
+                    <div class="col-span-1 sm:col-span-2">
+                        <div class="relative {{ $isReadOnly ? 'pointer-events-none opacity-70' : '' }}">
+                            <x-form.date-picker id="datedoc" name="datedoc" placeholder="Select Date"
+                                defaultDate="{{ $dateDocValue ?? now()->format('m-d-Y') }}" dateFormat="m-d-Y" disabled="{{ $isReadOnly }}" />
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -160,6 +172,24 @@
                                 @foreach($pricelists as $pl)
                                     <option value="{{ $pl->id }}" {{ $currentPricelistId == $pl->id ? 'selected' : '' }}>
                                         {{ $pl->text }}
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Department -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 sm:items-center gap-2 sm:gap-4">
+                    <label class="text-left sm:text-right text-sm font-medium text-gray-600 dark:text-gray-400">Department</label>
+                    <div class="col-span-1 sm:col-span-2">
+                        <select id="c_department_id" {{ $isReadOnly ? 'disabled' : '' }}
+                            class="w-full text-sm rounded-lg border-gray-300 focus:border-brand-500 focus:ring-brand-500 dark:bg-gray-900 dark:border-gray-600 {{ $isReadOnly ? 'bg-gray-50 cursor-not-allowed' : '' }}">
+                            <option value="">- Select Department -</option>
+                            @if(isset($departments))
+                                @foreach($departments as $dept)
+                                    <option value="{{ $dept->id }}" {{ (isset($requisition) && $requisition->c_department_id == $dept->id) ? 'selected' : '' }}>
+                                        {{ $dept->text }}
                                     </option>
                                 @endforeach
                             @endif
