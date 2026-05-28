@@ -51,6 +51,7 @@ return [
                 'Closed' => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
                 'In Progress' => 'bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400',
                 'Approved' => 'bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400',
+                'Not Approved' => 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400',
             ],
         ],
         'workflow' => [
@@ -62,7 +63,7 @@ return [
             'prepare_action' => env('IDEMPIERE_PR_PREPARE_ACTION', 'PR'),
             'void_action' => env('IDEMPIERE_PR_VOID_ACTION', 'VO'),
             'reactivate_action' => env('IDEMPIERE_PR_REACTIVATE_ACTION', 'RE'),
-            'reactivate_from' => array_map('trim', explode(',', env('IDEMPIERE_PR_REACTIVATE_FROM', 'CO'))),
+            'reactivate_from' => array_map('trim', explode(',', env('IDEMPIERE_PR_REACTIVATE_FROM', 'CO,NA'))),
             'standard_from' => array_map('trim', explode(',', env('IDEMPIERE_PR_STANDARD_ACTION_FROM', 'DR,IN,IP'))),
             'action_labels' => [
                 'CO' => 'Complete',

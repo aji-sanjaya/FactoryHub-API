@@ -673,8 +673,9 @@ class RequisitionController extends Controller
 
                 if (!in_array($requisition->docstatus, $reactivateFrom, true)) {
                     return response()->json([
-                        'message' => 'Only completed requisitions can be re-activated.',
-                    ], 422);
+                        'success' => false,
+                        'message' => 'This requisition cannot be re-activated from its current status.',
+                    ], 400);
                 }
 
                 \Illuminate\Support\Facades\DB::connection('idempiere')

@@ -901,7 +901,8 @@ class DeliveryScheduleController extends Controller
                 ->value('description');
 
             $preparedDate = date('d M Y H:i', strtotime($deliverySchedule->updated));
-            $preparedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode($deliverySchedule->documentno);
+            $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate($deliverySchedule->documentno);
+            $preparedQr = "data:image/svg+xml;base64," . base64_encode($preparedQrData);
 
             $checkedBy = null;
             $checkedQr = null;

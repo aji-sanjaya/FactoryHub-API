@@ -872,7 +872,8 @@ class SalesOrderController extends Controller
                 ->value('description');
 
             $preparedDate = date('d M Y H:i', strtotime($salesOrder->updated));
-            $preparedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode($salesOrder->documentno);
+            $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate($salesOrder->documentno);
+            $preparedQr = "data:image/svg+xml;base64," . base64_encode($preparedQrData);
 
             $checkedBy = null;
             $checkedQr = null;

@@ -33,6 +33,7 @@ class MRequisition extends Model
     const STATUS_COMPLETED = 'CO';
     const STATUS_CLOSED = 'CL';
     const STATUS_APPROVED = 'AP';
+    const STATUS_NOT_APPROVED = 'NA';
     const STATUS_INVALID = 'IN';
     const STATUS_VOIDED = 'VO';
     const STATUS_REVERSED = 'RE';
@@ -44,11 +45,12 @@ class MRequisition extends Model
             self::STATUS_INVALID => 'Drafted', // Treat Invalid as Draft-like
             self::STATUS_IN_PROGRESS => 'In Progress',
             self::STATUS_APPROVED => 'Approved', // Could be considered In Progress or separate
+            self::STATUS_NOT_APPROVED => 'Not Approved',
             self::STATUS_COMPLETED => 'Completed',
             self::STATUS_CLOSED => 'Closed',
             self::STATUS_VOIDED => 'Voided',
             self::STATUS_REVERSED => 'Reversed',
-            default => 'Unknown',
+            default => 'Unknown Status (' . $this->docstatus . ')',
         };
     }
 
