@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Purchase Requisition {{ $requisition->documentno }}</title>
     <style>
         body {
@@ -10,75 +11,89 @@
             margin: 0;
             padding: 0;
         }
+
         .container {
             width: 100%;
         }
-        table { 
+
+        table {
             width: 100%;
             border-collapse: collapse;
         }
+
         .header-table td {
             border: 1px solid black;
             padding: 5px;
             vertical-align: middle;
         }
+
         .logo-cell {
             width: 15%;
             text-align: center;
         }
+
         .title-cell {
             width: 55%;
             text-align: center;
         }
+
         .info-cell {
             width: 30%;
         }
+
         .logo-box {
             display: inline-block;
             width: 40px;
             height: 40px;
-            background-color: #FFD700; /* Yellow */
+            background-color: #FFD700;
+            /* Yellow */
             color: white;
             font-size: 24px;
             font-weight: bold;
             line-height: 40px;
             border: 1px solid #ccc;
         }
+
         h1 {
             margin: 0;
             font-size: 16pt;
             font-weight: bold;
         }
+
         h2 {
             margin: 5px 0 0;
             font-size: 12pt;
             font-weight: bold;
         }
+
         .info-row {
             margin-bottom: 2px;
         }
+
         .info-label {
             display: inline-block;
             width: 80px;
         }
-        
+
         /* Sub Header */
         .sub-header {
             margin-top: 10px;
             border: 1px solid black;
             padding: 5px;
         }
+
         .sub-header td {
             border: none;
             padding: 2px;
         }
-        
+
         /* Items Table */
         .items-table {
             margin-top: 10px;
             width: 100%;
             border-collapse: collapse;
         }
+
         .items-table th {
             border-top: 2px solid black;
             border-bottom: 2px solid black;
@@ -86,35 +101,45 @@
             text-align: left;
             font-weight: bold;
         }
+
         .items-table td {
             padding: 5px;
             border-bottom: 1px solid #ccc;
         }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
         .total-row td {
             border-top: 2px solid black;
             font-weight: bold;
             padding: 10px 5px;
         }
+
         .items-table .last-row td {
             border-bottom: 2px solid black;
         }
-        
+
         /* Footer */
         .footer {
             margin-top: 20px;
         }
+
         .footer-note {
             margin-bottom: 20px;
             font-size: 9pt;
         }
+
         .disclaimer {
             font-size: 8pt;
             margin-bottom: 20px;
         }
-        
+
         /* Signatures */
         .signature-table {
             width: 100%;
@@ -122,26 +147,31 @@
             border: none;
             margin-top: 30px;
         }
+
         .signature-table td {
             border: none;
             text-align: center;
             vertical-align: top;
             padding: 10px;
         }
+
         .sig-label {
             margin-bottom: 15px;
             font-size: 10pt;
         }
+
         .sig-qr {
             margin-bottom: 15px;
             height: 80px;
             display: flex;
             justify-content: center;
         }
+
         .sig-qr img {
             display: block;
             margin: 0 auto;
         }
+
         .sig-name {
             font-weight: bold;
             text-decoration: underline;
@@ -149,12 +179,14 @@
             margin-bottom: 2px;
             font-size: 10pt;
         }
+
         .sig-date {
             font-size: 9pt;
             font-family: 'Courier New', Courier, monospace;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <!-- Header -->
@@ -164,16 +196,19 @@
                 <td style="border-bottom: 1px solid black; padding: 8px; width: 60%; vertical-align: top;">
                     <strong style="font-size: 13pt;">{{ $clientName ?? '' }}</strong><br>
                     @if(!empty($orgInfo))
-                        @if(!empty($orgInfo->address1))<span style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
-                        @if(!empty($orgInfo->address2))<span style="font-size: 9pt;">{{ $orgInfo->address2 }}</span><br>@endif
+                        @if(!empty($orgInfo->address1))<span
+                        style="font-size: 9pt;">{{ $orgInfo->address1 }}</span><br>@endif
+                        @if(!empty($orgInfo->address2))<span
+                        style="font-size: 9pt;">{{ $orgInfo->address2 }}</span><br>@endif
                         @if(!empty($orgInfo->address3))<span style="font-size: 9pt;">{{ $orgInfo->address3 }}</span>@endif
                     @endif
                 </td>
-                <td style="border-bottom: 1px solid black; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
+                <td
+                    style="border-bottom: 1px solid black; padding: 8px; width: 40%; text-align: right; vertical-align: top;">
                     @if(!empty($logoBase64))
                         <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; width: auto;"><br>
                     @endif
-                    <strong style="font-size: 13pt;">Purchase Requisition IT</strong>
+                    <strong style="font-size: 13pt;">Purchase Requisition {{ $costCenterValue ?? '' }}</strong>
                 </td>
             </tr>
             <!-- Row 2: Doc Info | Prepared by | Legalized By | Approved by -->
@@ -181,53 +216,70 @@
                 <td colspan="2" style="border: 1px solid black; border-top: none; padding: 0;">
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr>
-                            <td style="border-right: 1px solid black; padding: 5px; width: 46%; vertical-align: top; font-size: 10pt;">
+                            <td
+                                style="border-right: 1px solid black; padding: 5px; width: 46%; vertical-align: top; font-size: 10pt;">
                                 <table style="width: 100%; border-collapse: collapse;">
                                     <tr>
-                                        <td style="width: 32%; padding: 0; border: none; vertical-align: top;">Document</td>
+                                        <td style="width: 32%; padding: 0; border: none; vertical-align: top;">Document
+                                        </td>
                                         <td style="width: 4%; padding: 0; border: none; vertical-align: top;">:</td>
-                                        <td style="padding: 0; border: none; vertical-align: top;"><strong>{{ $requisition->documentno }}</strong></td>
+                                        <td style="padding: 0; border: none; vertical-align: top;">
+                                            <strong>{{ $requisition->documentno }}</strong></td>
                                     </tr>
                                     <tr>
                                         <td style="padding: 0; border: none; vertical-align: top;">Date</td>
                                         <td style="padding: 0; border: none; vertical-align: top;">:</td>
-                                        <td style="padding: 0; border: none; vertical-align: top;"><strong>{{ date('d M Y', strtotime($requisition->datedoc)) }}</strong></td>
+                                        <td style="padding: 0; border: none; vertical-align: top;">
+                                            <strong>{{ date('d M Y', strtotime($requisition->datedoc)) }}</strong></td>
                                     </tr>
                                     <tr>
                                         <td style="padding: 0; border: none; vertical-align: top;">Status</td>
                                         <td style="padding: 0; border: none; vertical-align: top;">:</td>
-                                        <td style="padding: 0; border: none; vertical-align: top;">{{ $requisition->status_label }}</td>
+                                        <td style="padding: 0; border: none; vertical-align: top;">
+                                            {{ $requisition->status_label }}</td>
                                     </tr>
                                 </table>
                             </td>
-                            <td style="border-right: 1px solid black; padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
+                            <td
+                                style="border-right: 1px solid black; padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
                                 <em>Prepared by</em><br>
                                 @if($preparedQr)
-                                    <img src="{{ $preparedQr }}" alt="QR" style="height: 60px; width: 60px; margin: 4px auto; display: block;">
+                                    <img src="{{ $preparedQr }}" alt="QR"
+                                        style="height: 60px; width: 60px; margin: 4px auto; display: block;">
                                 @else
                                     <div style="height: 68px;"></div>
                                 @endif
-                                <div style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">{{ $preparedBy ?? '' }}</div>
+                                <div
+                                    style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">
+                                    {{ $preparedBy ?? '' }}</div>
                                 <div style="font-size: 8pt;">{{ $preparedDate }}</div>
                             </td>
-                            <td style="border-right: 1px solid black; padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
+                            <td
+                                style="border-right: 1px solid black; padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
                                 <em>Legalized By</em><br>
                                 @if($checkedQr)
-                                    <img src="{{ $checkedQr }}" alt="QR" style="height: 60px; width: 60px; margin: 4px auto; display: block;">
+                                    <img src="{{ $checkedQr }}" alt="QR"
+                                        style="height: 60px; width: 60px; margin: 4px auto; display: block;">
                                 @else
                                     <div style="height: 68px;"></div>
                                 @endif
-                                <div style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">{{ $checkedBy ?? '' }}</div>
+                                <div
+                                    style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">
+                                    {{ $checkedBy ?? '' }}</div>
                                 <div style="font-size: 8pt;">{{ $checkedDate }}</div>
                             </td>
-                            <td style="padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
+                            <td
+                                style="padding: 5px; width: 18%; text-align: center; vertical-align: top; font-size: 10pt;">
                                 <em>Approved by</em><br>
                                 @if($approvedQr)
-                                    <img src="{{ $approvedQr }}" alt="QR" style="height: 60px; width: 60px; margin: 4px auto; display: block;">
+                                    <img src="{{ $approvedQr }}" alt="QR"
+                                        style="height: 60px; width: 60px; margin: 4px auto; display: block;">
                                 @else
                                     <div style="height: 68px;"></div>
                                 @endif
-                                <div style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">{{ $approvedBy ?? '' }}</div>
+                                <div
+                                    style="font-weight: bold; font-style: italic; text-decoration: underline; font-size: 9pt; margin-top: 2px;">
+                                    {{ $approvedBy ?? '' }}</div>
                                 <div style="font-size: 8pt;">{{ $approvedDate }}</div>
                             </td>
                         </tr>
@@ -266,7 +318,7 @@
                         <td></td>
                         <td></td>
                     </tr>
-                @endforeach 
+                @endforeach
             </tbody>
         </table>
 
@@ -275,10 +327,11 @@
             <div class="footer-note">
                 <strong>Note :</strong><br>
                 {{ $requisition->description ?: '-' }}
-            </div> 
+            </div>
 
 
         </div>
     </div>
 </body>
+
 </html>

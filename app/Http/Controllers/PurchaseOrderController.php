@@ -1245,14 +1245,17 @@ class PurchaseOrderController extends Controller
             }
 
             // Fetch Signers Names from Custom Columns
-            $checkedBy = $order->adw_ad_user_checked_id ?
-                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->adw_ad_user_checked_id)->value('description') : null;
+            $checkedUser = $order->adw_ad_user_checked_id ?
+                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->adw_ad_user_checked_id)->first(['description', 'name']) : null;
+            $checkedBy = $checkedUser ? ($checkedUser->description ?: $checkedUser->name) : null;
 
-            $approvedBy = $order->adw_ad_user_approved_id ?
-                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->adw_ad_user_approved_id)->value('description') : null;
+            $approvedUser = $order->adw_ad_user_approved_id ?
+                \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->adw_ad_user_approved_id)->first(['description', 'name']) : null;
+            $approvedBy = $approvedUser ? ($approvedUser->description ?: $approvedUser->name) : null;
 
             // Creator as Prepared By
-            $preparedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->createdby)->value('description');
+            $preparedUser = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->createdby)->first(['description', 'name']);
+            $preparedBy = $preparedUser ? ($preparedUser->description ?: $preparedUser->name) : null;
             $preparedDate = date('d M Y H:i', strtotime($order->created));
             $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Prepared by " . $preparedBy . " on " . $order->created);
             $preparedQr = "data:image/svg+xml;base64," . base64_encode($preparedQrData);
@@ -1261,7 +1264,7 @@ class PurchaseOrderController extends Controller
             $checkedQr = null;
             $checkedDate = 'Pending'; // Default when not yet actioned
             if ($checkedBy) {
-                if ($order->adw_checked_isapproved == 'AP' && $order->adw_checked_date) {
+                if ($order->adw_checked_date) {
                     $checkedDate = date('d M Y H:i', strtotime($order->adw_checked_date));
                     $checkedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Checked by " . $checkedBy . " on " . $order->adw_checked_date);
                     $checkedQr = "data:image/svg+xml;base64," . base64_encode($checkedQrData);
@@ -1274,7 +1277,7 @@ class PurchaseOrderController extends Controller
             $approvedQr = null;
             $approvedDate = 'Pending'; // Default when not yet actioned
             if ($approvedBy) {
-                if ($order->adw_approve_isapproved == 'AP' && $order->adw_approved_date) {
+                if ($order->adw_approved_date) {
                     $approvedDate = date('d M Y H:i', strtotime($order->adw_approved_date));
                     $approvedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Approved by " . $approvedBy . " on " . $order->adw_approved_date);
                     $approvedQr = "data:image/svg+xml;base64," . base64_encode($approvedQrData);

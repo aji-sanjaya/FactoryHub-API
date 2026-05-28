@@ -781,9 +781,10 @@ class RequisitionController extends Controller
             // Consolidate Signature Data (Name, Date, QR)
 
             // 1. Prepared By (CreatedBy)
-            $preparedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
+            $preparedUser = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
                 ->where('ad_user_id', $requisition->createdby)
-                ->value('description');
+                ->first(['description', 'name']);
+            $preparedBy = $preparedUser ? ($preparedUser->description ?: $preparedUser->name) : null;
 
             $preparedDate = date('d M Y H:i', strtotime($requisition->updated));
             $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate($requisition->documentno);
@@ -795,9 +796,10 @@ class RequisitionController extends Controller
             $checkedDate = 'PENDING';
 
             if ($requisition->adw_ad_user_checked_id) {
-                $checkedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
+                $checkedUser = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
                     ->where('ad_user_id', $requisition->adw_ad_user_checked_id)
-                    ->value('description');
+                    ->first(['description', 'name']);
+                $checkedBy = $checkedUser ? ($checkedUser->description ?: $checkedUser->name) : null;
 
                 // Check Status (AP/RE)
                 if ($requisition->adw_checked_isapproved == 'AP' && $requisition->adw_checked_date) {
@@ -815,9 +817,10 @@ class RequisitionController extends Controller
             $approvedDate = 'PENDING';
 
             if ($requisition->adw_ad_user_approved_id) {
-                $approvedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
+                $approvedUser = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')
                     ->where('ad_user_id', $requisition->adw_ad_user_approved_id)
-                    ->value('description');
+                    ->first(['description', 'name']);
+                $approvedBy = $approvedUser ? ($approvedUser->description ?: $approvedUser->name) : null;
 
                 // Check Status (AP/RE)
                 if ($requisition->adw_approve_isapproved == 'AP' && $requisition->adw_approved_date) {
@@ -859,6 +862,19 @@ class RequisitionController extends Controller
                     ->first();
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::warning('Org info fetch warning: ' . $e->getMessage());
+            }
+
+            // Fetch Cost Center Value
+            $costCenterValue = '';
+            if ($requisition->c_costcenter_id) {
+                try {
+                    $costCenterValue = \Illuminate\Support\Facades\DB::connection('idempiere')
+                        ->table('c_costcenter')
+                        ->where('c_costcenter_id', $requisition->c_costcenter_id)
+                        ->value('value');
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Cost center fetch warning: ' . $e->getMessage());
+                }
             }
 
             // Fetch Tenant Logo
@@ -907,6 +923,7 @@ class RequisitionController extends Controller
                 'approvedDate' => $approvedDate,
                 'clientName' => $clientName,
                 'orgInfo' => $orgInfo,
+                'costCenterValue' => $costCenterValue,
             ])->setOptions(['isRemoteEnabled' => true]);
 
             $filename = 'Requisition-' . str_replace(['/', '\\'], '-', $requisition->documentno) . '.pdf';
