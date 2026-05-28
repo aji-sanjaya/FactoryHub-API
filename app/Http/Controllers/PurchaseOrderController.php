@@ -1254,7 +1254,8 @@ class PurchaseOrderController extends Controller
             // Creator as Prepared By
             $preparedBy = \Illuminate\Support\Facades\DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $order->createdby)->value('description');
             $preparedDate = date('d M Y H:i', strtotime($order->created));
-            $preparedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Prepared by " . $preparedBy . " on " . $order->created);
+            $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Prepared by " . $preparedBy . " on " . $order->created);
+            $preparedQr = "data:image/svg+xml;base64," . base64_encode($preparedQrData);
 
             // Checked By — status logic
             $checkedQr = null;
@@ -1262,7 +1263,8 @@ class PurchaseOrderController extends Controller
             if ($checkedBy) {
                 if ($order->adw_checked_isapproved == 'AP' && $order->adw_checked_date) {
                     $checkedDate = date('d M Y H:i', strtotime($order->adw_checked_date));
-                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $order->adw_checked_date);
+                    $checkedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Checked by " . $checkedBy . " on " . $order->adw_checked_date);
+                    $checkedQr = "data:image/svg+xml;base64," . base64_encode($checkedQrData);
                 } elseif ($order->adw_checked_isapproved == 'RE') {
                     $checkedDate = 'Rejected';
                 }
@@ -1274,7 +1276,8 @@ class PurchaseOrderController extends Controller
             if ($approvedBy) {
                 if ($order->adw_approve_isapproved == 'AP' && $order->adw_approved_date) {
                     $approvedDate = date('d M Y H:i', strtotime($order->adw_approved_date));
-                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $order->adw_approved_date);
+                    $approvedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Approved by " . $approvedBy . " on " . $order->adw_approved_date);
+                    $approvedQr = "data:image/svg+xml;base64," . base64_encode($approvedQrData);
                 } elseif ($order->adw_approve_isapproved == 'RE') {
                     $approvedDate = 'Rejected';
                 }

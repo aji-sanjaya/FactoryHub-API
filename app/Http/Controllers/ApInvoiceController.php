@@ -1427,7 +1427,8 @@ class ApInvoiceController extends Controller
                 ->value('name');
 
             $preparedDate = date('d M Y H:i', strtotime($invoice->created));
-            $preparedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Prepared by " . $preparedBy . " on " . $invoice->created);
+            $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Prepared by " . $preparedBy . " on " . $invoice->created);
+            $preparedQr = "data:image/svg+xml;base64," . base64_encode($preparedQrData);
 
             // Checked By (Verification) — status logic
             $checkedQr = null;
@@ -1435,7 +1436,8 @@ class ApInvoiceController extends Controller
             if ($checkedBy) {
                 if ($invoice->adw_checked_isapproved == 'AP' && $invoice->adw_checked_date) {
                     $checkedDate = date('d M Y H:i', strtotime($invoice->adw_checked_date));
-                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $invoice->adw_checked_date);
+                    $checkedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Checked by " . $checkedBy . " on " . $invoice->adw_checked_date);
+                    $checkedQr = "data:image/svg+xml;base64," . base64_encode($checkedQrData);
                 } elseif ($invoice->adw_checked_isapproved == 'RE') {
                     $checkedDate = 'Rejected';
                 }
@@ -1447,7 +1449,8 @@ class ApInvoiceController extends Controller
             if ($approvedBy) {
                 if ($invoice->adw_approve_isapproved == 'AP' && $invoice->adw_approved_date) {
                     $approvedDate = date('d M Y H:i', strtotime($invoice->adw_approved_date));
-                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $invoice->adw_approved_date);
+                    $approvedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Approved by " . $approvedBy . " on " . $invoice->adw_approved_date);
+                    $approvedQr = "data:image/svg+xml;base64," . base64_encode($approvedQrData);
                 } elseif ($invoice->adw_approve_isapproved == 'RE') {
                     $approvedDate = 'Rejected';
                 }

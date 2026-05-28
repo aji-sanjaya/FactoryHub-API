@@ -2,10 +2,10 @@
 
 return [
 
-    'client_id' => (int) env('IDEMPIERE_CLIENT_ID', 1000000), 
+    'client_id' => (int) env('IDEMPIERE_CLIENT_ID', 1000000),
     'org_id' => (int) env('IDEMPIERE_ORG_ID', 0),
     'tenant' => [
-        'name' => env('IDEMPIERE_TENANT_NAME', 'Dharmamulia Prima Karya'),
+        'name' => env('IDEMPIERE_TENANT_NAME', 'PT Adyawinsa Plastics Industry'),
     ],
 
     /*
@@ -15,7 +15,7 @@ return [
     */
 
     'api' => [
-        'base_url' => env('IDEMPIERE_API_BASE_URL', 'https://api-erp-dev.adyawinsa.com/idempiere/api/v1'),
+        'base_url' => env('IDEMPIERE_API_BASE_URL', 'https://api-erp-dev.adyawinsa.com/api/v1'),
     ],
 
     /*

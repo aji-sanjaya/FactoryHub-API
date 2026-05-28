@@ -444,8 +444,7 @@ class MaterialReceiptController extends Controller
             }
         }
 
-        // QR Codes for LEGALIZATION footer (api.qrserver.com)
-        $qrBase = 'https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=';
+        // QR Codes for LEGALIZATION footer
 
         // QC Incoming QR — adw_ad_user_checked_id (checked/step-1)
         $qcIncomingQr = null;
@@ -455,7 +454,8 @@ class MaterialReceiptController extends Controller
                 ->where('ad_user_id', $receipt->adw_ad_user_checked_id)
                 ->value('name');
             if ($receipt->adw_checked_isapproved === 'AP' && !empty($receipt->adw_checked_date)) {
-                $qcIncomingQr = $qrBase . urlencode('Checked by ' . $checkedByName . ' on ' . $receipt->adw_checked_date);
+                $qcIncomingQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate('Checked by ' . $checkedByName . ' on ' . $receipt->adw_checked_date);
+                $qcIncomingQr = "data:image/svg+xml;base64," . base64_encode($qcIncomingQrData);
             }
         }
 
@@ -467,14 +467,16 @@ class MaterialReceiptController extends Controller
                 ->where('ad_user_id', $receipt->adw_ad_user_approved_id)
                 ->value('name');
             if ($receipt->adw_approve_isapproved === 'AP' && !empty($receipt->adw_approved_date)) {
-                $purchasingQr = $qrBase . urlencode('Approved by ' . $approvedByName . ' on ' . $receipt->adw_approved_date);
+                $purchasingQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate('Approved by ' . $approvedByName . ' on ' . $receipt->adw_approved_date);
+                $purchasingQr = "data:image/svg+xml;base64," . base64_encode($purchasingQrData);
             }
         }
 
         // User QR — show when document is Complete (CO)
         $userQr = null;
         if (strtoupper(trim((string) $receipt->docstatus)) === 'CO' && $updatedByName && !empty($receipt->updated)) {
-            $userQr = $qrBase . urlencode('Completed by ' . $updatedByName . ' on ' . $receipt->updated);
+            $userQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate('Completed by ' . $updatedByName . ' on ' . $receipt->updated);
+            $userQr = "data:image/svg+xml;base64," . base64_encode($userQrData);
         }
 
         // Doc type code / name

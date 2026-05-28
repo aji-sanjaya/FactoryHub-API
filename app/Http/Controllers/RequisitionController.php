@@ -785,7 +785,8 @@ class RequisitionController extends Controller
                 ->value('name');
 
             $preparedDate = date('d M Y H:i', strtotime($requisition->updated));
-            $preparedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode($requisition->documentno);
+            $preparedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate($requisition->documentno);
+            $preparedQr = "data:image/svg+xml;base64," . base64_encode($preparedQrData);
 
             // 2. Checked By (Step 1)
             $checkedBy = null;
@@ -800,7 +801,8 @@ class RequisitionController extends Controller
                 // Check Status (AP/RE)
                 if ($requisition->adw_checked_isapproved == 'AP' && $requisition->adw_checked_date) {
                     $checkedDate = date('d M Y H:i', strtotime($requisition->adw_checked_date));
-                    $checkedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Checked by " . $checkedBy . " on " . $requisition->adw_checked_date);
+                    $checkedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Checked by " . $checkedBy . " on " . $requisition->adw_checked_date);
+                    $checkedQr = "data:image/svg+xml;base64," . base64_encode($checkedQrData);
                 } elseif ($requisition->adw_checked_isapproved == 'RE') {
                     $checkedDate = 'REJECTED';
                 }
@@ -819,7 +821,8 @@ class RequisitionController extends Controller
                 // Check Status (AP/RE)
                 if ($requisition->adw_approve_isapproved == 'AP' && $requisition->adw_approved_date) {
                     $approvedDate = date('d M Y H:i', strtotime($requisition->adw_approved_date));
-                    $approvedQr = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=" . urlencode("Approved by " . $approvedBy . " on " . $requisition->adw_approved_date);
+                    $approvedQrData = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate("Approved by " . $approvedBy . " on " . $requisition->adw_approved_date);
+                    $approvedQr = "data:image/svg+xml;base64," . base64_encode($approvedQrData);
                 } elseif ($requisition->adw_approve_isapproved == 'RE') {
                     $approvedDate = 'REJECTED';
                 }
