@@ -599,8 +599,8 @@ class ApInvoiceController extends Controller
             $payload['C_BPartner_ID'] = (int) $validated['c_bpartner_id'];
         if (!empty($validated['invoice_date']))
             $payload['DateInvoiced'] = $validated['invoice_date'];
-        if (!empty($validated['due_date']))
-            $payload['DueDate'] = $validated['due_date'];
+        // if (!empty($validated['due_date']))
+        //     $payload['DueDate'] = $validated['due_date'];
         if (!empty($validated['date_acct']))
             $payload['DateAcct'] = $validated['date_acct'];
         if (!empty($validated['doc_type_id']))
