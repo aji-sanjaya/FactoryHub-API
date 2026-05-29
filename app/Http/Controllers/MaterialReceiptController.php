@@ -355,6 +355,7 @@ class MaterialReceiptController extends Controller
                 'il.movementqty as qty',
                 'il.description',
                 'p.name as product_name',
+                'p.value as product_code',
                 'u.name as uom_name',
                 'u.uomsymbol as uom_symbol'
             )

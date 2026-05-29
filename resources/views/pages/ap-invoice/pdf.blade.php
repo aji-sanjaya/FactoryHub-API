@@ -423,16 +423,41 @@
                         <div style="page-break-before: always;"></div>
                     @endif
 
-                    <!-- Footer & Signature -->
-                    <table style="width: 100%;">
+                    <!-- Signatures -->
+                    <table class="signature-table" style="width: 100%;">
                         <tr>
-                            <td style="width: 65%; vertical-align: top; font-size: 9pt;">
+                            <td style="width: 33.33%;">
+                                <div class="sig-title">Prepared By</div>
+                                @if(isset($preparedQr) && $preparedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $preparedQr }}" alt="QR"
+                                            style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $preparedBy ?? '..................' }}</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $preparedDate ?? '' }})</div>
                             </td>
-                            <td style="width: 35%; vertical-align: top; text-align: center;">
-                                <div style="margin-bottom: 80px;">Your faithfully,</div>
-                                
-                                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; min-width: 180px; padding-bottom: 2px;">Abraham Sulaeman</div>
-                                <div style="font-size: 9pt; margin-top: 2px;">Admin Director</div>
+                            <td style="width: 33.33%;">
+                                <div class="sig-title">Checked By</div>
+                                @if(isset($checkedQr) && $checkedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $checkedQr }}" alt="QR"
+                                            style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $checkedBy ?? '..................' }}</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $checkedDate ?? '' }})</div>
+                            </td>
+                            <td style="width: 33.33%;">
+                                <div class="sig-title">Approved By</div>
+                                @if(isset($approvedQr) && $approvedQr)
+                                    <div style="margin-bottom: 5px;"><img src="{{ $approvedQr }}" alt="QR"
+                                            style="height: 60px; width: 60px;"></div>
+                                @else
+                                    <div style="height: 65px;"></div>
+                                @endif
+                                <div class="sig-name">{{ $approvedBy ?? '..................' }}</div>
+                                <div style="font-size: 7pt; font-style: italic;">({{ $approvedDate ?? '' }})</div>
                             </td>
                         </tr>
                     </table>

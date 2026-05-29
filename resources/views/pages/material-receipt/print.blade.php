@@ -5,7 +5,7 @@
     <title>Good Receipt {{ $receipt->documentno }}</title>
     <style>
         @page {
-            margin-top:    150px;
+            margin-top:    190px;
             margin-bottom: 1cm;
             margin-left:   20px;
             margin-right:  20px;
@@ -14,7 +14,7 @@
         /* ── Fixed repeating header ── */
         #page-header {
             position: fixed;
-            top:    -145px;
+            top:    -185px;
             left:   0px;
             right:  0px;
             background: white;

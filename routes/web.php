@@ -169,6 +169,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/approval-pr/{id}', [\App\Http\Controllers\ApprovalPrController::class, 'show'])->name('approval-pr.show');
     Route::post('/approval-pr/{id}/process', [\App\Http\Controllers\ApprovalPrController::class, 'process'])->name('approval-pr.process');
 
+        // Approval AP Invoice
+    Route::get('/approval-ap-invoice', [\App\Http\Controllers\ApprovalApInvoiceController::class, 'index'])->name('approval-ap-invoice.index');
+    Route::get('/approval-ap-invoice/suppliers', [\App\Http\Controllers\ApprovalApInvoiceController::class, 'getSuppliers'])->name('approval-ap-invoice.suppliers');
+    Route::get('/approval-ap-invoice/{id}', [\App\Http\Controllers\ApprovalApInvoiceController::class, 'show'])->name('approval-ap-invoice.show');
+    Route::post('/approval-ap-invoice/{id}/process', [\App\Http\Controllers\ApprovalApInvoiceController::class, 'process'])->name('approval-ap-invoice.process');
+    Route::get('/approval-ap-invoice/attachment/view/{document_id}/{file_name}', [\App\Http\Controllers\ApprovalApInvoiceController::class, 'viewAttachment'])->name('approval-ap-invoice.attachment.view');
+    // Approval MR
+    Route::get('/approval-mr', [\App\Http\Controllers\ApprovalMrController::class, 'index'])->name('approval-mr.index');
+    Route::get('/approval-mr/suppliers', [\App\Http\Controllers\ApprovalMrController::class, 'getSuppliers'])->name('approval-mr.suppliers');
+    Route::get('/approval-mr/{id}', [\App\Http\Controllers\ApprovalMrController::class, 'show'])->name('approval-mr.show');
+    Route::post('/approval-mr/{id}/process', [\App\Http\Controllers\ApprovalMrController::class, 'process'])->name('approval-mr.process');
+    Route::get('/approval-mr/attachment/view/{document_id}/{file_name}', [\App\Http\Controllers\ApprovalMrController::class, 'viewAttachment'])->name('approval-mr.attachment.view');
     // Approval PO
     Route::get('/approval-po', [\App\Http\Controllers\ApprovalPoController::class, 'index'])->name('approval-po.index');
     Route::get('/approval-po/suppliers', [\App\Http\Controllers\ApprovalPoController::class, 'getSuppliers'])->name('approval-po.suppliers');

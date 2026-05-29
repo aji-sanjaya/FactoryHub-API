@@ -439,7 +439,7 @@ class ApInvoiceController extends Controller
             'c_tax_id' => 'required',
             'ad_user_id' => 'required',
             'adw_ad_user_approved_id' => 'nullable|integer',
-            'adw_ad_user_verification_id' => 'nullable|integer',
+            'adw_ad_user_checked_id' => 'nullable|integer',
             'c_department_id' => 'nullable|integer',
             'c_costcenter_id' => 'nullable|integer',
         ]);
@@ -531,8 +531,8 @@ class ApInvoiceController extends Controller
             $payload['ADW_AD_User_Approved_ID'] = (int) $validated['adw_ad_user_approved_id'];
         }
 
-        if (!empty($validated['adw_ad_user_verification_id'])) {
-            $payload['ADW_AD_User_Verification_ID'] = (int) $validated['adw_ad_user_verification_id'];
+        if (!empty($validated['adw_ad_user_checked_id'])) {
+            $payload['ADW_AD_User_Verification_ID'] = (int) $validated['adw_ad_user_checked_id'];
         }
 
         if (!empty($validated['c_department_id'])) {
@@ -587,7 +587,7 @@ class ApInvoiceController extends Controller
             'c_tax_id' => 'nullable|integer',
             'ad_user_id' => 'nullable|integer',
             'adw_ad_user_approved_id' => 'nullable|integer',
-            'adw_ad_user_verification_id' => 'nullable|integer',
+            'adw_ad_user_checked_id' => 'nullable|integer',
             'c_department_id' => 'nullable|integer',
             'c_costcenter_id' => 'nullable|integer',
         ]);
@@ -621,8 +621,8 @@ class ApInvoiceController extends Controller
             $payload['AD_User_ID'] = (int) $validated['ad_user_id'];
         if (array_key_exists('adw_ad_user_approved_id', $validated))
             $payload['ADW_AD_User_Approved_ID'] = $validated['adw_ad_user_approved_id'] ? (int) $validated['adw_ad_user_approved_id'] : null;
-        if (array_key_exists('adw_ad_user_verification_id', $validated))
-            $payload['ADW_AD_User_Verification_ID'] = $validated['adw_ad_user_verification_id'] ? (int) $validated['adw_ad_user_verification_id'] : null;
+        if (array_key_exists('adw_ad_user_checked_id', $validated))
+            $payload['ADW_AD_User_Verification_ID'] = $validated['adw_ad_user_checked_id'] ? (int) $validated['adw_ad_user_checked_id'] : null;
         if (array_key_exists('c_department_id', $validated))
             $payload['C_Department_ID'] = $validated['c_department_id'] ? (int) $validated['c_department_id'] : null;
         if (array_key_exists('c_costcenter_id', $validated))
@@ -1414,8 +1414,8 @@ class ApInvoiceController extends Controller
                 ->value('name');
 
             // Fetch Signers Names from Custom Columns
-            $checkedBy = $invoice->adw_ad_user_verification_id ?
-                DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $invoice->adw_ad_user_verification_id)->value('name') : null;
+            $checkedBy = $invoice->adw_ad_user_checked_id ?
+                DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $invoice->adw_ad_user_checked_id)->value('name') : null;
 
             $approvedBy = $invoice->adw_ad_user_approved_id ?
                 DB::connection('idempiere')->table('ad_user')->where('ad_user_id', $invoice->adw_ad_user_approved_id)->value('name') : null;

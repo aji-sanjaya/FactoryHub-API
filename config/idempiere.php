@@ -15,7 +15,7 @@ return [
     */
 
     'api' => [
-        'base_url' => env('IDEMPIERE_API_BASE_URL', 'https://api-erp-dev.adyawinsa.com/api/v1'),
+        'base_url' => env('IDEMPIERE_API_BASE_URL', 'https://api-erp-dev.adyawinsa.com/idempiere/api/v1'),
     ],
 
     /*
@@ -165,6 +165,85 @@ return [
         ],
     ],
 
+    
+    'approval-mr' => [
+        'defaults' => [
+            'status_filter' => env('IDEMPIERE_APPROVAL_MR_DEFAULT_STATUS', 'IP'),
+            'all_filter_value' => env('IDEMPIERE_APPROVAL_MR_ALL_FILTER_VALUE', 'ALL'),
+            'is_so_trx' => env('IDEMPIERE_APPROVAL_MR_IS_SO_TRX', 'N'),
+        ],
+        'statuses' => [
+            'pending' => env('IDEMPIERE_APPROVAL_MR_PENDING_STATUS', 'IP'),
+            'approved' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_MR_APPROVED_STATUSES', 'CO,CL'))),
+            'rejected' => env('IDEMPIERE_APPROVAL_MR_REJECTED_STATUS', 'VO'),
+            'actionable' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_MR_ACTIONABLE_STATUSES', 'IP'))),
+            'exclude_from_list' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_MR_EXCLUDED_STATUSES', 'DR,CL'))),
+            'filter_aliases' => [
+                'APPROVED' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_MR_FILTER_APPROVED', 'CO,CL'))),
+                'REJECTED' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_MR_FILTER_REJECTED', 'VO'))),
+            ],
+            'filter_options' => [
+                ['value' => 'IP', 'label' => 'Pending'],
+                ['value' => 'APPROVED', 'label' => 'Approved'],
+                ['value' => 'REJECTED', 'label' => 'Rejected'],
+                ['value' => 'ALL', 'label' => 'All'],
+            ],
+            'labels' => [
+                'DR' => 'Drafted',
+                'IN' => 'Drafted',
+                'IP' => 'In Progress',
+                'AP' => 'Approved',
+                'CO' => 'Completed',
+                'CL' => 'Closed',
+                'VO' => 'Voided',
+                'RE' => 'Reversed',
+            ],
+            'badge_classes' => [
+                'Completed' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                'Closed' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                'Approved' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                'In Progress' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+                'Drafted' => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+                'Voided' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+                'Rejected' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+                'Reversed' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+            ],
+        ],
+        'workflow' => [
+            'table_id' => (int) env('IDEMPIERE_APPROVAL_MR_WORKFLOW_TABLE_ID', 319),
+            'open_state' => env('IDEMPIERE_APPROVAL_MR_WORKFLOW_OPEN_STATE', 'OS'),
+            'allowed_actions' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_MR_ALLOWED_ACTIONS', 'APPROVE,REJECT'))),
+            'endpoints' => [
+                'APPROVE' => env('IDEMPIERE_APPROVAL_MR_APPROVE_ENDPOINT', 'workflow/approve'),
+                'REJECT' => env('IDEMPIERE_APPROVAL_MR_REJECT_ENDPOINT', 'workflow/reject'),
+            ],
+            'custom_column_statuses' => [
+                'APPROVE' => env('IDEMPIERE_APPROVAL_MR_CUSTOM_APPROVE_STATUS', 'AP'),
+                'REJECT' => env('IDEMPIERE_APPROVAL_MR_CUSTOM_REJECT_STATUS', 'RE'),
+            ],
+            'action_labels' => [
+                'APPROVE' => 'Approve',
+                'REJECT' => 'Reject',
+            ],
+            'confirmation_titles' => [
+                'APPROVE' => 'Approve Request?',
+                'REJECT' => 'Reject Request?',
+            ],
+            'confirm_button_text' => [
+                'APPROVE' => 'Yes, Approve',
+                'REJECT' => 'Yes, Reject',
+            ],
+            'success_messages' => [
+                'APPROVE' => 'Approved successfully.',
+                'REJECT' => 'Rejected successfully.',
+            ],
+            'no_activity_message' => env('IDEMPIERE_APPROVAL_MR_NO_ACTIVITY_MESSAGE', 'No active workflow activity found for your role on this document.'),
+        ],
+        'limits' => [
+            'list_per_page' => (int) env('IDEMPIERE_APPROVAL_MR_LIST_PER_PAGE', 10),
+            'select2_per_page' => (int) env('IDEMPIERE_APPROVAL_MR_SELECT2_PER_PAGE', 10),
+        ],
+    ],
     'approval-po' => [
         'defaults' => [
             'status_filter' => env('IDEMPIERE_APPROVAL_PO_DEFAULT_STATUS', 'IP'),
@@ -943,4 +1022,83 @@ return [
         'driver' => (int) env('IDEMPIERE_DRIVER_ROLE_ID', 1000051),
     ],
 
+
+    'approval-ap-invoice' => [
+        'defaults' => [
+            'status_filter' => env('IDEMPIERE_APPROVAL_AP_INVOICE_DEFAULT_STATUS', 'IP'),
+            'all_filter_value' => env('IDEMPIERE_APPROVAL_AP_INVOICE_ALL_FILTER_VALUE', 'ALL'),
+            'is_so_trx' => env('IDEMPIERE_APPROVAL_AP_INVOICE_IS_SO_TRX', 'N'),
+        ],
+        'statuses' => [
+            'pending' => env('IDEMPIERE_APPROVAL_AP_INVOICE_PENDING_STATUS', 'IP'),
+            'approved' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_AP_INVOICE_APPROVED_STATUSES', 'CO,CL'))),
+            'rejected' => env('IDEMPIERE_APPROVAL_AP_INVOICE_REJECTED_STATUS', 'VO'),
+            'actionable' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_AP_INVOICE_ACTIONABLE_STATUSES', 'IP'))),
+            'exclude_from_list' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_AP_INVOICE_EXCLUDED_STATUSES', 'DR,CL'))),
+            'filter_aliases' => [
+                'APPROVED' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_AP_INVOICE_FILTER_APPROVED', 'CO,CL'))),
+                'REJECTED' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_AP_INVOICE_FILTER_REJECTED', 'VO'))),
+            ],
+            'filter_options' => [
+                ['value' => 'IP', 'label' => 'Pending'],
+                ['value' => 'APPROVED', 'label' => 'Approved'],
+                ['value' => 'REJECTED', 'label' => 'Rejected'],
+                ['value' => 'ALL', 'label' => 'All'],
+            ],
+            'labels' => [
+                'DR' => 'Drafted',
+                'IN' => 'Drafted',
+                'IP' => 'In Progress',
+                'AP' => 'Approved',
+                'CO' => 'Completed',
+                'CL' => 'Closed',
+                'VO' => 'Voided',
+                'RE' => 'Reversed',
+            ],
+            'badge_classes' => [
+                'Completed' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                'Closed' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                'Approved' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                'In Progress' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+                'Drafted' => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+                'Voided' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+                'Rejected' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+                'Reversed' => 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+            ],
+        ],
+        'workflow' => [
+            'table_id' => (int) env('IDEMPIERE_APPROVAL_AP_INVOICE_WORKFLOW_TABLE_ID', 318),
+            'open_state' => env('IDEMPIERE_APPROVAL_AP_INVOICE_WORKFLOW_OPEN_STATE', 'OS'),
+            'allowed_actions' => array_map('trim', explode(',', env('IDEMPIERE_APPROVAL_AP_INVOICE_ALLOWED_ACTIONS', 'APPROVE,REJECT'))),
+            'endpoints' => [
+                'APPROVE' => env('IDEMPIERE_APPROVAL_AP_INVOICE_APPROVE_ENDPOINT', 'workflow/approve'),
+                'REJECT' => env('IDEMPIERE_APPROVAL_AP_INVOICE_REJECT_ENDPOINT', 'workflow/reject'),
+            ],
+            'custom_column_statuses' => [
+                'APPROVE' => env('IDEMPIERE_APPROVAL_AP_INVOICE_CUSTOM_APPROVE_STATUS', 'AP'),
+                'REJECT' => env('IDEMPIERE_APPROVAL_AP_INVOICE_CUSTOM_REJECT_STATUS', 'RE'),
+            ],
+            'action_labels' => [
+                'APPROVE' => 'Approve',
+                'REJECT' => 'Reject',
+            ],
+            'confirmation_titles' => [
+                'APPROVE' => 'Approve Request?',
+                'REJECT' => 'Reject Request?',
+            ],
+            'confirm_button_text' => [
+                'APPROVE' => 'Yes, Approve',
+                'REJECT' => 'Yes, Reject',
+            ],
+            'success_messages' => [
+                'APPROVE' => 'Approved successfully.',
+                'REJECT' => 'Rejected successfully.',
+            ],
+            'no_activity_message' => env('IDEMPIERE_APPROVAL_AP_INVOICE_NO_ACTIVITY_MESSAGE', 'No active workflow activity found for your role on this document.'),
+        ],
+        'limits' => [
+            'list_per_page' => (int) env('IDEMPIERE_APPROVAL_AP_INVOICE_LIST_PER_PAGE', 10),
+            'select2_per_page' => (int) env('IDEMPIERE_APPROVAL_AP_INVOICE_SELECT2_PER_PAGE', 10),
+        ],
+    ],
 ];
